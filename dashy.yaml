@@ -1,0 +1,3038 @@
+title: Power Monitor
+views:
+  # Power Monitoring Tab
+  - title: Power Monitor
+    path: power-monitor
+    icon: mdi:lightning-bolt
+    type: panel
+    cards:
+      - type: custom:vertical-stack-in-card
+        cards:
+          # Header Section with Status
+          - type: custom:mushroom-title-card
+            title: ⚡ Power Monitoring
+            subtitle: Real-time usage & load shedding control
+
+          # Main Status Card
+          - type: custom:mushroom-template-card
+            primary: >
+              {% set current = state_attr('sensor.power_usage_status', 'current_power_kw') | float(0) %}
+              {% set threshold = state_attr('sensor.power_usage_status', 'threshold_kw') | float(5) %}
+              {{ current }} kW / {{ threshold }} kW
+            secondary: >
+              {% set status = states('sensor.power_usage_status') %}
+              {% set pct = state_attr('sensor.power_usage_status', 'percentage_of_threshold') | float(0) %}
+              {% if status == 'critical' %}
+                🔴 CRITICAL - {{ pct }}% of threshold!
+              {% elif status == 'warning' %}
+                🟡 WARNING - {{ pct }}% of threshold
+              {% else %}
+                🟢 NORMAL - {{ pct }}% of threshold
+              {% endif %}
+            icon: mdi:transmission-tower
+            icon_color: >
+              {% set status = states('sensor.power_usage_status') %}
+              {% if status == 'critical' %}
+                red
+              {% elif status == 'warning' %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            badge_icon: >
+              {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                mdi:shield-check
+              {% else %}
+                mdi:shield-off
+              {% endif %}
+            badge_color: >
+              {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                blue
+              {% else %}
+                disabled
+              {% endif %}
+            fill_container: false
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+              entity: sensor.power_usage_status
+            card_mod:
+              style: |
+                ha-card {
+                  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-background-color) 100%);
+                  border: 2px solid
+                    {% set status = states('sensor.power_usage_status') %}
+                    {% if status == 'critical' %}
+                      var(--red-color)
+                    {% elif status == 'warning' %}
+                      var(--orange-color)
+                    {% else %}
+                      var(--green-color)
+                    {% endif %};
+                }
+
+          # Power Gauge - uses threshold from input_number.power_threshold
+          - type: custom:button-card
+            entity: sensor.aidon_active_power_import
+            name: Current Power Usage
+            show_state: true
+            show_icon: true
+            icon: mdi:flash
+            state_display: |
+              [[[
+                const power = parseFloat(entity.state);
+                if (isNaN(power)) return '— W';
+                return (power / 1000).toFixed(2) + ' kW';
+              ]]]
+            custom_fields:
+              threshold: |
+                [[[
+                  const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                  return 'Limit: ' + (threshold / 1000).toFixed(1) + ' kW';
+                ]]]
+              percentage: |
+                [[[
+                  const power = parseFloat(entity.state) || 0;
+                  const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                  const pct = Math.round((power / threshold) * 100);
+                  return pct + '%';
+                ]]]
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 16px
+                - background: |
+                    [[[
+                      const power = parseFloat(entity.state) || 0;
+                      const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                      const pct = power / threshold;
+                      if (pct >= 1) return 'linear-gradient(135deg, rgba(239,68,68,0.3), rgba(239,68,68,0.1))';
+                      if (pct >= 0.8) return 'linear-gradient(135deg, rgba(250,204,21,0.3), rgba(250,204,21,0.1))';
+                      return 'linear-gradient(135deg, rgba(74,222,128,0.2), rgba(74,222,128,0.05))';
+                    ]]]
+                - border: |
+                    [[[
+                      const power = parseFloat(entity.state) || 0;
+                      const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                      const pct = power / threshold;
+                      if (pct >= 1) return '2px solid rgba(239,68,68,0.8)';
+                      if (pct >= 0.8) return '2px solid rgba(250,204,21,0.7)';
+                      return '2px solid rgba(74,222,128,0.5)';
+                    ]]]
+              icon:
+                - width: 40px
+                - color: |
+                    [[[
+                      const power = parseFloat(entity.state) || 0;
+                      const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                      const pct = power / threshold;
+                      if (pct >= 1) return '#ef4444';
+                      if (pct >= 0.8) return '#facc15';
+                      return '#4ade80';
+                    ]]]
+              name:
+                - font-size: 12px
+                - opacity: 0.8
+              state:
+                - font-size: 28px
+                - font-weight: bold
+                - color: |
+                    [[[
+                      const power = parseFloat(entity.state) || 0;
+                      const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                      const pct = power / threshold;
+                      if (pct >= 1) return '#ef4444';
+                      if (pct >= 0.8) return '#facc15';
+                      return '#4ade80';
+                    ]]]
+              custom_fields:
+                threshold:
+                  - font-size: 11px
+                  - opacity: 0.7
+                  - margin-top: 4px
+                percentage:
+                  - font-size: 18px
+                  - font-weight: bold
+                  - margin-top: 4px
+                  - color: |
+                      [[[
+                        const power = parseFloat(entity.state) || 0;
+                        const threshold = parseFloat(states['input_number.power_threshold']?.state) || 5000;
+                        const pct = power / threshold;
+                        if (pct >= 1) return '#ef4444';
+                        if (pct >= 0.8) return '#facc15';
+                        return '#4ade80';
+                      ]]]
+              grid:
+                - grid-template-areas: '"i n" "i s" "i percentage" "i threshold"'
+                - grid-template-columns: 50px 1fr
+                - grid-template-rows: min-content min-content min-content min-content
+
+          # ApexCharts - Beautiful Power Graph
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Power Usage (24h)
+              show_states: true
+              colorize_states: true
+            now:
+              show: true
+              color: '#ff0000'
+              label: Now
+            span:
+              start: day
+            yaxis:
+              - id: power
+                min: 0
+                apex_config:
+                  tickAmount: 5
+                  labels:
+                    formatter: |
+                      EVAL:function(value) {
+                        return (value / 1000).toFixed(1) + ' kW';
+                      }
+            series:
+              - entity: sensor.aidon_active_power_import
+                name: Power
+                stroke_width: 3
+                type: area
+                curve: smooth
+                color: '#2196f3'
+                opacity: 0.3
+                extend_to: false
+                show:
+                  legend_value: true
+                  in_header: true
+                group_by:
+                  func: avg
+                  duration: 5min
+              - entity: input_number.power_threshold
+                name: Threshold
+                stroke_width: 2
+                type: line
+                curve: straight
+                color: '#f44336'
+                opacity: 0.8
+                extend_to: end
+                show:
+                  legend_value: false
+                  in_header: false
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 12px;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+
+          # Hourly Average Tracking - Critical for Norwegian billing
+          - type: custom:mushroom-title-card
+            title: ⏱️ Hourly Average Tracking
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.current_hour_average_power') | float(0) / 1000) | round(2) }} kW
+                secondary: Hour Avg
+                icon: mdi:chart-timeline-variant
+                icon_color: >
+                  {% set avg = states('sensor.current_hour_average_power') | float(0) %}
+                  {% set threshold = states('sensor.next_tier_threshold') | float(5000) %}
+                  {% if avg > threshold %}red
+                  {% elif avg > threshold * 0.8 %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.current_hour_average_power
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(33, 150, 243, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.projected_hourly_power') | float(0) / 1000) | round(2) }} kW
+                secondary: >
+                  {% set minutes = now().minute %}
+                  {% if minutes < 15 %}Proj (95%)
+                  {% elif minutes < 30 %}Proj (97%)
+                  {% elif minutes < 45 %}Proj (98%)
+                  {% else %}Proj (99%){% endif %}
+                icon: mdi:chart-line-variant
+                icon_color: >
+                  {% set proj = states('sensor.projected_hourly_power') | float(0) %}
+                  {% set threshold = states('sensor.next_tier_threshold') | float(5000) %}
+                  {% set minutes = now().minute %}
+                  {% if minutes < 15 %}{% set pct = 0.95 %}
+                  {% elif minutes < 30 %}{% set pct = 0.97 %}
+                  {% elif minutes < 45 %}{% set pct = 0.98 %}
+                  {% else %}{% set pct = 0.99 %}{% endif %}
+                  {% if proj > threshold * pct %}red
+                  {% elif proj > threshold * pct * 0.95 %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.projected_hourly_power
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(156, 39, 176, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ 60 - now().minute }} min
+                secondary: Remaining
+                icon: mdi:clock-outline
+                icon_color: >
+                  {% set remaining = 60 - now().minute %}
+                  {% if remaining <= 10 %}red
+                  {% elif remaining <= 20 %}amber
+                  {% else %}cyan{% endif %}
+                layout: vertical
+                tap_action:
+                  action: none
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(0, 188, 212, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set threshold = states('sensor.next_tier_threshold') | float(5000) %}
+                  {% set minutes = now().minute %}
+                  {% if minutes < 15 %}{% set pct = 0.95 %}
+                  {% elif minutes < 30 %}{% set pct = 0.97 %}
+                  {% elif minutes < 45 %}{% set pct = 0.98 %}
+                  {% else %}{% set pct = 0.99 %}{% endif %}
+                  {{ ((threshold * pct) / 1000) | round(2) }} kW
+                secondary: >
+                  {% set threshold = states('sensor.next_tier_threshold') | float(5000) / 1000 %}
+                  {% if state_attr('sensor.next_tier_threshold', 'day_already_lost') == true %}
+                    Dag tapt → {{ threshold | round(0) }} kW
+                  {% else %}
+                    Trigger ({{ threshold | round(0) }} kW maks)
+                  {% endif %}
+                icon: mdi:target
+                icon_color: >
+                  {% set projected = states('sensor.projected_hourly_power') | float(0) %}
+                  {% set threshold = states('sensor.next_tier_threshold') | float(5000) %}
+                  {% set minutes = now().minute %}
+                  {% if minutes < 15 %}{% set pct = 0.95 %}
+                  {% elif minutes < 30 %}{% set pct = 0.97 %}
+                  {% elif minutes < 45 %}{% set pct = 0.98 %}
+                  {% else %}{% set pct = 0.99 %}{% endif %}
+                  {% if projected > threshold * pct %}red
+                  {% elif projected > threshold * pct * 0.95 %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.next_tier_threshold
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: >
+                        {% set lost = state_attr('sensor.next_tier_threshold', 'day_already_lost') %}
+                        {% if lost == true %}rgba(156, 39, 176, 0.15)
+                        {% else %}rgba(74, 222, 128, 0.1){% endif %};
+                    }
+
+          # Quick Stats Row
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.aidon_active_power_import
+                name: Current
+                icon: mdi:flash
+                icon_color: amber
+                layout: vertical
+                tap_action:
+                  action: more-info
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(255, 152, 0, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.power_5min_average') | float(0) / 1000) | round(2) }} kW
+                secondary: 5min Avg
+                icon: mdi:chart-bell-curve-cumulative
+                icon_color: teal
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.power_5min_average
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(0, 150, 136, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('input_number.last_hour_average_power') | float(0) / 1000) | round(2) }} kW
+                secondary: Last Hour Avg
+                icon: mdi:history
+                icon_color: blue
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: input_number.last_hour_average_power
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(33, 150, 243, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_usage_status', 'devices_configured') }}
+                secondary: Devices Ready
+                icon: mdi:devices
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                    green
+                  {% else %}
+                    disabled
+                  {% endif %}
+                layout: vertical
+                tap_action:
+                  action: none
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(76, 175, 80, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% if is_state('sensor.smart_shedding_required', 'True') %}
+                    Shedding
+                  {% elif state_attr('sensor.next_tier_threshold', 'day_already_lost') == true %}
+                    Dag Tapt
+                  {% else %}
+                    Normal
+                  {% endif %}
+                secondary: >
+                  {% if is_state('sensor.smart_shedding_required', 'True') %}
+                    {{ state_attr('sensor.smart_shedding_required', 'trigger_percentage') }} av {{ (states('sensor.next_tier_threshold') | float / 1000) | round(0) }} kW
+                  {% else %}
+                    {% set threshold = states('sensor.next_tier_threshold') | float(5000) %}
+                    {% set minutes = now().minute %}
+                    {% if minutes < 15 %}{% set pct = 0.95 %}
+                    {% elif minutes < 30 %}{% set pct = 0.97 %}
+                    {% elif minutes < 45 %}{% set pct = 0.98 %}
+                    {% else %}{% set pct = 0.99 %}{% endif %}
+                    Trigger: {{ ((threshold * pct) / 1000) | round(2) }} kW
+                  {% endif %}
+                icon: >
+                  {% if is_state('sensor.smart_shedding_required', 'True') %}
+                    mdi:flash-alert
+                  {% elif state_attr('sensor.next_tier_threshold', 'day_already_lost') == true %}
+                    mdi:calendar-alert
+                  {% else %}
+                    mdi:flash-check
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('sensor.smart_shedding_required', 'True') %}
+                    red
+                  {% elif state_attr('sensor.next_tier_threshold', 'day_already_lost') == true %}
+                    purple
+                  {% else %}
+                    green
+                  {% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.smart_shedding_required
+                card_mod:
+                  style: |
+                    ha-card {
+                      {% if is_state('sensor.smart_shedding_required', 'True') %}
+                      background: rgba(239, 68, 68, 0.2);
+                      animation: pulse 1s infinite;
+                      {% elif state_attr('sensor.next_tier_threshold', 'day_already_lost') == true %}
+                      background: rgba(156, 39, 176, 0.15);
+                      {% else %}
+                      background: rgba(74, 222, 128, 0.1);
+                      {% endif %}
+                    }
+                    @keyframes pulse {
+                      0%, 100% { opacity: 1; }
+                      50% { opacity: 0.7; }
+                    }
+
+          # Fastledd Tracking - Norwegian billing (avg of 3 highest daily peaks)
+          - type: custom:mushroom-title-card
+            title: 📊 Fastledd (Månedlig)
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('input_number.todays_peak_power') | float(0) / 1000) | round(2) }} kW
+                secondary: Dagens Døgnmaks
+                icon: mdi:chart-bar
+                icon_color: >
+                  {% set peak = states('input_number.todays_peak_power') | float(0) %}
+                  {% set threshold = states('sensor.next_tier_threshold') | float(5000) %}
+                  {% if peak > threshold %}red
+                  {% elif peak > threshold * 0.8 %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: input_number.todays_peak_power
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(255, 152, 0, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.fastledd_average') | float(0) / 1000) | round(2) }} kW
+                secondary: Fastledd Snitt
+                icon: mdi:speedometer
+                icon_color: >
+                  {% set avg = states('sensor.fastledd_average') | float(0) / 1000 %}
+                  {% if avg > 10 %}red
+                  {% elif avg > 5 %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.fastledd_average
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(156, 39, 176, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ states('sensor.fastledd_tier') | replace('Trinn ', '') | truncate(12, true, '') }}
+                secondary: Fastledd Trinn
+                icon: mdi:stairs
+                icon_color: >
+                  {% set tier = state_attr('sensor.fastledd_tier', 'tier_number') | int(1) %}
+                  {% if tier >= 5 %}red
+                  {% elif tier >= 3 %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.fastledd_tier
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(63, 81, 181, 0.1);
+                    }
+
+          # Top 3 Monthly Peaks
+          - type: custom:mushroom-chips-card
+            chips:
+              - type: template
+                icon: mdi:podium-gold
+                icon_color: amber
+                content: >
+                  #1: {{ (states('input_number.monthly_peak_1') | float(0) / 1000) | round(1) }} kW
+                tap_action:
+                  action: more-info
+                  entity: input_number.monthly_peak_1
+              - type: template
+                icon: mdi:podium-silver
+                icon_color: grey
+                content: >
+                  #2: {{ (states('input_number.monthly_peak_2') | float(0) / 1000) | round(1) }} kW
+                tap_action:
+                  action: more-info
+                  entity: input_number.monthly_peak_2
+              - type: template
+                icon: mdi:podium-bronze
+                icon_color: deep-orange
+                content: >
+                  #3: {{ (states('input_number.monthly_peak_3') | float(0) / 1000) | round(1) }} kW
+                tap_action:
+                  action: more-info
+                  entity: input_number.monthly_peak_3
+
+          # Configuration Section
+          - type: custom:mushroom-title-card
+            title: ⚙️ Configuration
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: "-100 W"
+                icon: mdi:minus-circle
+                icon_color: red
+                tap_action:
+                  action: call-service
+                  service: input_number.decrement
+                  service_data:
+                    entity_id: input_number.power_threshold
+                layout: vertical
+                fill_container: true
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('input_number.power_threshold') | float(5000) / 1000) | round(2) }} kW
+                secondary: Power Threshold
+                icon: mdi:flash-triangle
+                icon_color: red
+                tap_action:
+                  action: more-info
+                  entity: input_number.power_threshold
+                layout: vertical
+                fill_container: true
+              - type: custom:mushroom-template-card
+                primary: "+100 W"
+                icon: mdi:plus-circle
+                icon_color: red
+                tap_action:
+                  action: call-service
+                  service: input_number.increment
+                  service_data:
+                    entity_id: input_number.power_threshold
+                layout: vertical
+                fill_container: true
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-select-card
+                entity: input_boolean.load_shedding_enabled
+                name: Auto Load Shedding
+                icon: mdi:robot
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                    blue
+                  {% else %}
+                    disabled
+                  {% endif %}
+                secondary: >
+                  {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                    Enabled
+                  {% else %}
+                    Disabled
+                  {% endif %}
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-select-card
+                entity: input_boolean.smart_shedding_mode
+                name: Smart Shedding
+                icon: mdi:brain
+                icon_color: >
+                  {% if is_state('input_boolean.smart_shedding_mode', 'on') %}
+                    green
+                  {% else %}
+                    orange
+                  {% endif %}
+                secondary: >
+                  {% if is_state('input_boolean.smart_shedding_mode', 'on') %}
+                    Minimum devices
+                  {% else %}
+                    All devices
+                  {% endif %}
+                tap_action:
+                  action: toggle
+
+          - type: custom:mushroom-select-card
+            entity: input_boolean.auto_restore_devices
+            name: Auto-Restore Devices
+            icon: mdi:restore
+            icon_color: >
+              {% if is_state('input_boolean.auto_restore_devices', 'on') %}
+                cyan
+              {% else %}
+                disabled
+              {% endif %}
+            secondary: >
+              {% if is_state('input_boolean.auto_restore_devices', 'on') %}
+                Devices restore when power normalizes
+              {% else %}
+                Manual restore required
+              {% endif %}
+            tap_action:
+              action: toggle
+
+          # Spike Duration Assumption - how long high-power events are assumed to last
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: "-5 min"
+                icon: mdi:minus-circle
+                icon_color: teal
+                tap_action:
+                  action: call-service
+                  service: input_number.decrement
+                  service_data:
+                    entity_id: input_number.spike_duration_assumption
+                layout: vertical
+                fill_container: true
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ states('input_number.spike_duration_assumption') | int }} min
+                secondary: Spike Duration
+                icon: mdi:timer-outline
+                icon_color: teal
+                tap_action:
+                  action: more-info
+                  entity: input_number.spike_duration_assumption
+                layout: vertical
+                fill_container: true
+              - type: custom:mushroom-template-card
+                primary: "+5 min"
+                icon: mdi:plus-circle
+                icon_color: teal
+                tap_action:
+                  action: call-service
+                  service: input_number.increment
+                  service_data:
+                    entity_id: input_number.spike_duration_assumption
+                layout: vertical
+                fill_container: true
+
+          # Power Analysis
+          - type: custom:mushroom-title-card
+            title: 📊 Power Analysis
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_usage_status', 'total_sheddable_power') }} kW
+                secondary: Total Sheddable
+                icon: mdi:power-plug-off
+                icon_color: blue
+                layout: vertical
+                tap_action:
+                  action: none
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_usage_status', 'power_over_threshold') }} kW
+                secondary: Over Threshold
+                icon: mdi:flash-alert
+                icon_color: >
+                  {% if state_attr('sensor.power_usage_status', 'power_over_threshold') | float(0) > 0 %}
+                    red
+                  {% else %}
+                    green
+                  {% endif %}
+                layout: vertical
+                tap_action:
+                  action: none
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_usage_status', 'estimated_power_after_shedding') }} kW
+                secondary: After Shedding
+                icon: mdi:trending-down
+                icon_color: green
+                layout: vertical
+                tap_action:
+                  action: none
+
+          # Load Shedding Devices
+          - type: custom:mushroom-title-card
+            title: 🔌 Load Shedding Devices
+            subtitle: Select devices to automatically turn off
+
+          - type: custom:mushroom-chips-card
+            chips:
+              - type: template
+                entity: input_boolean.load_shedding_varmtvannsbereder
+                icon: mdi:water-boiler
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_varmtvannsbereder', 'on') %}
+                    blue
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Water Heater
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_oljeovn_stikk
+                icon: mdi:radiator
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_oljeovn_stikk', 'on') %}
+                    orange
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Oil Heater
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_layzspa_heat
+                icon: mdi:hot-tub
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_layzspa_heat', 'on') %}
+                    cyan
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Hot Tub
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_fryser
+                icon: mdi:fridge
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_fryser', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Freezer
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_vaskemaskin
+                icon: mdi:washing-machine
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_vaskemaskin', 'on') %}
+                    purple
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Washer
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_sofakrok
+                icon: mdi:sofa
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_sofakrok', 'on') %}
+                    green
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Sofakrok
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_mill_wifi_oil
+                icon: mdi:radiator
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_mill_wifi_oil', 'on') %}
+                    deep-orange
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Mill WiFi Oil
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_varmekabler_bad
+                icon: mdi:heating-coil
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_varmekabler_bad', 'on') %}
+                    pink
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Floor Bad
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_varmekabler_gang
+                icon: mdi:heating-coil
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_varmekabler_gang', 'on') %}
+                    pink
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Floor Gang
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.load_shedding_varmeovn_gjesterom
+                icon: mdi:radiator
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_varmeovn_gjesterom', 'on') %}
+                    amber
+                  {% else %}
+                    disabled
+                  {% endif %}
+                content: Gjesterom
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+            alignment: center
+
+          # Device Priorities
+          - type: custom:mushroom-title-card
+            title: 🎯 Load Shedding Priority
+            subtitle: Lower number = shed first (1-10)
+
+          - type: entities
+            title: Priority Configuration
+            show_header_toggle: false
+            state_color: true
+            entities:
+              - entity: input_number.priority_oljeovn_stikk
+                name: "1️⃣ Oljeovn Stikk"
+                icon: mdi:radiator
+              - entity: input_number.priority_mill_wifi_oil
+                name: "2️⃣ Mill WiFi Oil"
+                icon: mdi:radiator
+              - entity: input_number.priority_layzspa_heat
+                name: "2️⃣ Hot Tub Heater"
+                icon: mdi:hot-tub
+              - entity: input_number.priority_vaskemaskin
+                name: "3️⃣ Vaskemaskin"
+                icon: mdi:washing-machine
+              - entity: input_number.priority_sofakrok
+                name: "4️⃣ Sofakrok"
+                icon: mdi:sofa
+              - entity: input_number.priority_varmtvannsbereder
+                name: "5️⃣ Varmtvannsbereder"
+                icon: mdi:water-boiler
+              - entity: input_number.priority_fryser
+                name: "🔟 Fryser"
+                icon: mdi:fridge
+              - entity: input_number.priority_varmekabler_bad
+                name: "3️⃣ Varmekabler Bad"
+                icon: mdi:heating-coil
+              - entity: input_number.priority_varmekabler_gang
+                name: "3️⃣ Varmekabler Gang"
+                icon: mdi:heating-coil
+              - entity: input_number.priority_varmeovn_gjesterom
+                name: "3️⃣ Varmeovn Gjesterom"
+                icon: mdi:radiator
+
+          # Power Draw Configuration
+          - type: custom:mushroom-title-card
+            title: ⚡ Expected Power Draw
+            subtitle: Set typical power consumption per device
+
+          - type: entities
+            title: Power Draw Settings
+            show_header_toggle: false
+            entities:
+              - entity: input_number.power_draw_oljeovn_stikk
+                name: Oljeovn Stikk
+                icon: mdi:radiator
+                secondary_info: >
+                  {% if is_state('switch.oljeovn_stikk', 'on') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_mill_wifi_oil
+                name: Mill WiFi Oil
+                icon: mdi:radiator
+                secondary_info: >
+                  {% if not is_state('climate.mill_wi_fi_oil', 'off') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_layzspa_heat
+                name: Hot Tub Heater
+                icon: mdi:hot-tub
+                secondary_info: >
+                  {% if is_state('switch.layzspa_wifi_controller_layzspa_heat_regulation', 'on') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_vaskemaskin
+                name: Vaskemaskin
+                icon: mdi:washing-machine
+                secondary_info: >
+                  {% if is_state('switch.vaskemaskin_strom', 'on') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_sofakrok
+                name: Sofakrok
+                icon: mdi:sofa
+                secondary_info: >
+                  {% if not is_state('climate.sofakrok', 'off') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_varmtvannsbereder
+                name: Varmtvannsbereder
+                icon: mdi:water-boiler
+                secondary_info: >
+                  {% if is_state('switch.varmtvannsbereder', 'on') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_fryser
+                name: Fryser
+                icon: mdi:fridge
+                secondary_info: >
+                  {% if is_state('switch.fryser', 'on') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_varmekabler_bad
+                name: Varmekabler Bad
+                icon: mdi:heating-coil
+                secondary_info: >
+                  {% if not is_state('climate.varmekabler_bad', 'off') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_varmekabler_gang
+                name: Varmekabler Gang
+                icon: mdi:heating-coil
+                secondary_info: >
+                  {% if not is_state('climate.varmekabler_gang', 'off') %}Currently ON{% else %}Currently OFF{% endif %}
+              - entity: input_number.power_draw_varmeovn_gjesterom
+                name: Varmeovn Gjesterom
+                icon: mdi:radiator
+                secondary_info: >
+                  {% if is_state('switch.varmeovn_gjesterom', 'on') %}Currently ON{% else %}Currently OFF{% endif %}
+
+          # Current Device Status
+          - type: custom:mushroom-title-card
+            title: 🔌 Device Status & Control
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.varmtvannsbereder
+                name: Water Heater
+                icon: mdi:water-boiler
+                layout: vertical
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: switch.oljeovn_stikk
+                name: Oil Heater
+                icon: mdi:radiator
+                layout: vertical
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.layzspa_wifi_controller_layzspa_heat_regulation
+                name: Hot Tub
+                icon: mdi:hot-tub
+                layout: vertical
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: switch.fryser
+                name: Freezer
+                icon: mdi:fridge
+                layout: vertical
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.vaskemaskin_strom
+                name: Washing Machine
+                icon: mdi:washing-machine
+                layout: vertical
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: climate.sofakrok
+                name: Sofakrok
+                icon: mdi:sofa
+                layout: vertical
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+
+          - type: custom:mushroom-entity-card
+            entity: climate.mill_wi_fi_oil
+            name: Mill WiFi Oil
+            icon: mdi:radiator
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+
+  # Power Analytics & Control Tab
+  - title: Power Analytics
+    path: power-analytics
+    icon: mdi:chart-line
+    cards:
+      - type: custom:vertical-stack-in-card
+        cards:
+          # Header
+          - type: custom:mushroom-title-card
+            title: 📊 Power Analytics & Control
+            subtitle: Advanced monitoring and control center
+
+          # 1. ANTI-CYCLING STATUS
+          - type: custom:mushroom-title-card
+            title: 🕐 Anti-Cycling Status
+            subtitle: Cycle counts and restoration timers
+
+          - type: custom:mushroom-template-card
+            primary: >
+              {% if is_state('input_boolean.anti_cycling_protection', 'on') %}
+                Anti-Cycling Protection: ACTIVE
+              {% else %}
+                Anti-Cycling Protection: DISABLED
+              {% endif %}
+            secondary: >
+              {% set max = state_attr('sensor.power_analytics', 'highest_cycle_count') | int %}
+              {% if max > 0 %}
+                Highest: {{ state_attr('sensor.power_analytics', 'highest_cycle_device') }} ({{ max }} cycles)
+              {% else %}
+                No cycling detected
+              {% endif %}
+            icon: mdi:sync-alert
+            icon_color: >
+              {% set max = state_attr('sensor.power_analytics', 'highest_cycle_count') | int %}
+              {% if max >= 5 %}
+                red
+              {% elif max >= 3 %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            tap_action:
+              action: more-info
+              entity: sensor.power_analytics
+
+          - type: entities
+            title: Cycle Counts (Rapid Re-Shedding)
+            show_header_toggle: false
+            entities:
+              - entity: input_number.cycle_count_oljeovn_stikk
+                name: Oljeovn Stikk
+                icon: mdi:radiator
+              - entity: input_number.cycle_count_mill_wifi_oil
+                name: Mill WiFi Oil
+                icon: mdi:radiator
+              - entity: input_number.cycle_count_layzspa_heat
+                name: Hot Tub
+                icon: mdi:hot-tub
+              - entity: input_number.cycle_count_vaskemaskin
+                name: Vaskemaskin
+                icon: mdi:washing-machine
+              - entity: input_number.cycle_count_sofakrok
+                name: Sofakrok
+                icon: mdi:sofa
+              - entity: input_number.cycle_count_varmtvannsbereder
+                name: Varmtvannsbereder
+                icon: mdi:water-boiler
+              - entity: input_number.cycle_count_fryser
+                name: Fryser
+                icon: mdi:fridge
+              - entity: input_number.cycle_count_varmekabler_bad
+                name: Varmekabler Bad
+                icon: mdi:heating-coil
+              - entity: input_number.cycle_count_varmekabler_gang
+                name: Varmekabler Gang
+                icon: mdi:heating-coil
+              - entity: input_number.cycle_count_varmeovn_gjesterom
+                name: Varmeovn Gjesterom
+                icon: mdi:radiator
+
+          # 2. LOAD SHEDDING HISTORY & STATISTICS
+          - type: custom:mushroom-title-card
+            title: 📊 Load Shedding Statistics
+            subtitle: Lifetime shed counters
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set total = states('input_number.total_sheds_varmtvannsbereder') | int + states('input_number.total_sheds_oljeovn_stikk') | int + states('input_number.total_sheds_fryser') | int + states('input_number.total_sheds_vaskemaskin') | int + states('input_number.total_sheds_layzspa_heat') | int + states('input_number.total_sheds_sofakrok') | int + states('input_number.total_sheds_mill_wifi_oil') | int + states('input_number.total_sheds_varmekabler_bad') | int + states('input_number.total_sheds_varmekabler_gang') | int + states('input_number.total_sheds_varmeovn_gjesterom') | int %}
+                  {{ total }}
+                secondary: Total Sheds
+                icon: mdi:counter
+                icon_color: blue
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set counts = [
+                    states('input_number.total_sheds_varmtvannsbereder') | int,
+                    states('input_number.total_sheds_oljeovn_stikk') | int,
+                    states('input_number.total_sheds_fryser') | int,
+                    states('input_number.total_sheds_vaskemaskin') | int,
+                    states('input_number.total_sheds_layzspa_heat') | int,
+                    states('input_number.total_sheds_sofakrok') | int,
+                    states('input_number.total_sheds_mill_wifi_oil') | int,
+                    states('input_number.total_sheds_varmekabler_bad') | int,
+                    states('input_number.total_sheds_varmekabler_gang') | int,
+                    states('input_number.total_sheds_varmeovn_gjesterom') | int
+                  ] %}
+                  {{ counts | max }}
+                secondary: Most Shed Device
+                icon: mdi:trophy
+                icon_color: amber
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_analytics', 'devices_currently_shed') }}
+                secondary: Currently Shed
+                icon: mdi:power-plug-off
+                icon_color: red
+                layout: vertical
+
+          - type: entities
+            title: Lifetime Shed Counts
+            show_header_toggle: false
+            entities:
+              - entity: input_number.total_sheds_oljeovn_stikk
+                name: Oljeovn Stikk
+                icon: mdi:radiator
+              - entity: input_number.total_sheds_mill_wifi_oil
+                name: Mill WiFi Oil
+                icon: mdi:radiator
+              - entity: input_number.total_sheds_layzspa_heat
+                name: Hot Tub
+                icon: mdi:hot-tub
+              - entity: input_number.total_sheds_vaskemaskin
+                name: Vaskemaskin
+                icon: mdi:washing-machine
+              - entity: input_number.total_sheds_sofakrok
+                name: Sofakrok
+                icon: mdi:sofa
+              - entity: input_number.total_sheds_varmtvannsbereder
+                name: Varmtvannsbereder
+                icon: mdi:water-boiler
+              - entity: input_number.total_sheds_fryser
+                name: Fryser
+                icon: mdi:fridge
+              - entity: input_number.total_sheds_varmekabler_bad
+                name: Varmekabler Bad
+                icon: mdi:heating-coil
+              - entity: input_number.total_sheds_varmekabler_gang
+                name: Varmekabler Gang
+                icon: mdi:heating-coil
+              - entity: input_number.total_sheds_varmeovn_gjesterom
+                name: Varmeovn Gjesterom
+                icon: mdi:radiator
+
+          # 3. RESTORATION TIMER CARDS
+          - type: custom:mushroom-title-card
+            title: ⏱️ Restoration Timers
+            subtitle: Time remaining until devices can be restored
+
+          - type: custom:mushroom-chips-card
+            chips:
+              - type: template
+                entity: input_boolean.was_shed_varmtvannsbereder
+                icon: mdi:water-boiler
+                content: >
+                  {% if is_state('input_boolean.was_shed_varmtvannsbereder', 'on') %}
+                    {% set last = states('input_datetime.last_shed_varmtvannsbereder') %}
+                    {% set min_off = states('input_number.min_off_time_varmtvannsbereder') | int %}
+                    {% set cycles = states('input_number.cycle_count_varmtvannsbereder') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        VVB {{ remaining }}m
+                      {% else %}
+                        VVB Ready
+                      {% endif %}
+                    {% else %}
+                      VVB ?
+                    {% endif %}
+                  {% else %}
+                    VVB
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_varmtvannsbereder', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_oljeovn_stikk
+                icon: mdi:radiator
+                content: >
+                  {% if is_state('input_boolean.was_shed_oljeovn_stikk', 'on') %}
+                    {% set last = states('input_datetime.last_shed_oljeovn_stikk') %}
+                    {% set min_off = states('input_number.min_off_time_oljeovn_stikk') | int %}
+                    {% set cycles = states('input_number.cycle_count_oljeovn_stikk') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Olje {{ remaining }}m
+                      {% else %}
+                        Olje Ready
+                      {% endif %}
+                    {% else %}
+                      Olje ?
+                    {% endif %}
+                  {% else %}
+                    Olje
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_oljeovn_stikk', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_sofakrok
+                icon: mdi:sofa
+                content: >
+                  {% if is_state('input_boolean.was_shed_sofakrok', 'on') %}
+                    {% set last = states('input_datetime.last_shed_sofakrok') %}
+                    {% set min_off = states('input_number.min_off_time_sofakrok') | int %}
+                    {% set cycles = states('input_number.cycle_count_sofakrok') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Sofa {{ remaining }}m
+                      {% else %}
+                        Sofa Ready
+                      {% endif %}
+                    {% else %}
+                      Sofa ?
+                    {% endif %}
+                  {% else %}
+                    Sofa
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_sofakrok', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_fryser
+                icon: mdi:fridge
+                content: >
+                  {% if is_state('input_boolean.was_shed_fryser', 'on') %}
+                    {% set last = states('input_datetime.last_shed_fryser') %}
+                    {% set min_off = states('input_number.min_off_time_fryser') | int %}
+                    {% set cycles = states('input_number.cycle_count_fryser') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Fryser {{ remaining }}m
+                      {% else %}
+                        Fryser Ready
+                      {% endif %}
+                    {% else %}
+                      Fryser ?
+                    {% endif %}
+                  {% else %}
+                    Fryser
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_fryser', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_vaskemaskin
+                icon: mdi:washing-machine
+                content: >
+                  {% if is_state('input_boolean.was_shed_vaskemaskin', 'on') %}
+                    {% set last = states('input_datetime.last_shed_vaskemaskin') %}
+                    {% set min_off = states('input_number.min_off_time_vaskemaskin') | int %}
+                    {% set cycles = states('input_number.cycle_count_vaskemaskin') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Vaske {{ remaining }}m
+                      {% else %}
+                        Vaske Ready
+                      {% endif %}
+                    {% else %}
+                      Vaske ?
+                    {% endif %}
+                  {% else %}
+                    Vaske
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_vaskemaskin', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_layzspa_heat
+                icon: mdi:hot-tub
+                content: >
+                  {% if is_state('input_boolean.was_shed_layzspa_heat', 'on') %}
+                    {% set last = states('input_datetime.last_shed_layzspa_heat') %}
+                    {% set min_off = states('input_number.min_off_time_layzspa_heat') | int %}
+                    {% set cycles = states('input_number.cycle_count_layzspa_heat') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Spa {{ remaining }}m
+                      {% else %}
+                        Spa Ready
+                      {% endif %}
+                    {% else %}
+                      Spa ?
+                    {% endif %}
+                  {% else %}
+                    Spa
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_layzspa_heat', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_mill_wifi_oil
+                icon: mdi:radiator
+                content: >
+                  {% if is_state('input_boolean.was_shed_mill_wifi_oil', 'on') %}
+                    {% set last = states('input_datetime.last_shed_mill_wifi_oil') %}
+                    {% set min_off = states('input_number.min_off_time_mill_wifi_oil') | int %}
+                    {% set cycles = states('input_number.cycle_count_mill_wifi_oil') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Mill {{ remaining }}m
+                      {% else %}
+                        Mill Ready
+                      {% endif %}
+                    {% else %}
+                      Mill ?
+                    {% endif %}
+                  {% else %}
+                    Mill
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_mill_wifi_oil', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_varmekabler_bad
+                icon: mdi:heating-coil
+                content: >
+                  {% if is_state('input_boolean.was_shed_varmekabler_bad', 'on') %}
+                    {% set last = states('input_datetime.last_shed_varmekabler_bad') %}
+                    {% set min_off = states('input_number.min_off_time_varmekabler_bad') | int %}
+                    {% set cycles = states('input_number.cycle_count_varmekabler_bad') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Bad {{ remaining }}m
+                      {% else %}
+                        Bad Ready
+                      {% endif %}
+                    {% else %}
+                      Bad ?
+                    {% endif %}
+                  {% else %}
+                    Bad
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_varmekabler_bad', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_varmekabler_gang
+                icon: mdi:heating-coil
+                content: >
+                  {% if is_state('input_boolean.was_shed_varmekabler_gang', 'on') %}
+                    {% set last = states('input_datetime.last_shed_varmekabler_gang') %}
+                    {% set min_off = states('input_number.min_off_time_varmekabler_gang') | int %}
+                    {% set cycles = states('input_number.cycle_count_varmekabler_gang') | int %}
+                    {% set required = min_off + (cycles * 10) %}
+                    {% if last not in ['unknown', 'unavailable', ''] %}
+                      {% set elapsed = ((as_timestamp(now()) - as_timestamp(last)) / 60) | int %}
+                      {% set remaining = required - elapsed %}
+                      {% if remaining > 0 %}
+                        Gang {{ remaining }}m
+                      {% else %}
+                        Gang Ready
+                      {% endif %}
+                    {% else %}
+                      Gang ?
+                    {% endif %}
+                  {% else %}
+                    Gang
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_varmekabler_gang', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
+                entity: input_boolean.was_shed_varmeovn_gjesterom
+                icon: mdi:radiator
+                content: >
+                  {% set last_shed = states('input_datetime.last_shed_varmeovn_gjesterom') %}
+                  {% set min_off = states('input_number.min_off_time_varmeovn_gjesterom') | int %}
+                  {% set cycle_count = states('input_number.cycle_count_varmeovn_gjesterom') | int %}
+                  {% set backoff = cycle_count * 10 %}
+                  {% set required_off_time = min_off + backoff %}
+                  {% if is_state('input_boolean.was_shed_varmeovn_gjesterom', 'on') %}
+                    {% if last_shed not in ['unknown', 'unavailable', ''] %}
+                      {% set minutes_off = ((as_timestamp(now()) - as_timestamp(last_shed)) / 60) | int %}
+                      {% set remaining = required_off_time - minutes_off %}
+                      {% if remaining > 0 %}
+                        Gjest: {{ remaining }}m
+                      {% else %}
+                        Gjest: Ready!
+                      {% endif %}
+                    {% else %}
+                      Gjest: Shed
+                    {% endif %}
+                  {% else %}
+                    Gjest: OK
+                  {% endif %}
+                icon_color: >
+                  {% if is_state('input_boolean.was_shed_varmeovn_gjesterom', 'on') %}
+                    red
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: more-info
+            alignment: center
+
+          # 4. QUICK ACTION BUTTONS
+          - type: custom:mushroom-title-card
+            title: 🎮 Quick Actions
+            subtitle: Convenient control shortcuts
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Restore All
+                secondary: Bypass timers
+                icon: mdi:restore-alert
+                icon_color: red
+                tap_action:
+                  action: call-service
+                  service: script.power_restore_all_now
+                  confirmation:
+                    text: This will bypass anti-cycling protection. Continue?
+              - type: custom:mushroom-template-card
+                primary: Reset Cycles
+                secondary: Clear counters
+                icon: mdi:counter
+                icon_color: orange
+                tap_action:
+                  action: call-service
+                  service: script.power_reset_all_cycle_counters
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Test Shedding
+                secondary: 5 min test
+                icon: mdi:test-tube
+                icon_color: purple
+                tap_action:
+                  action: call-service
+                  service: script.power_test_load_shedding
+                  confirmation:
+                    text: This will temporarily lower the threshold to trigger shedding. Continue?
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                    Disable All
+                  {% else %}
+                    Enable All
+                  {% endif %}
+                secondary: Toggle all devices
+                icon: mdi:power-plug
+                icon_color: >
+                  {% if is_state('input_boolean.load_shedding_enabled', 'on') %}
+                    green
+                  {% else %}
+                    disabled
+                  {% endif %}
+                tap_action:
+                  action: call-service
+                  service: "{{ 'script.power_disable_all_shedding' if is_state('input_boolean.load_shedding_enabled', 'on') else 'script.power_enable_all_shedding' }}"
+
+          # 5. COST SAVINGS TRACKER (Placeholder for future Tibber integration)
+          - type: custom:mushroom-title-card
+            title: 💰 Cost Savings
+            subtitle: Power savings tracking
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set total_power = 0 %}
+                  {% for device in ['varmtvannsbereder', 'oljeovn_stikk', 'fryser', 'vaskemaskin', 'layzspa_heat', 'sofakrok', 'mill_wifi_oil', 'varmekabler_bad', 'varmekabler_gang', 'varmeovn_gjesterom'] %}
+                    {% set count = states('input_number.total_sheds_' + device) | int %}
+                    {% set power = states('input_number.power_draw_' + device) | int %}
+                    {% set min_off = states('input_number.min_off_time_' + device) | int %}
+                    {% set saved_kwh = (count * power * min_off / 60) / 1000 %}
+                    {% set total_power = total_power + saved_kwh %}
+                  {% endfor %}
+                  {{ total_power | round(1) }} kWh
+                secondary: Estimated Saved
+                icon: mdi:battery-charging
+                icon_color: green
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: "-"
+                secondary: Today's Savings
+                icon: mdi:calendar-today
+                icon_color: blue
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: "-"
+                secondary: This Week
+                icon: mdi:calendar-week
+                icon_color: cyan
+                layout: vertical
+
+          # 6. ENVIRONMENTAL CONTEXT
+          - type: custom:mushroom-title-card
+            title: 🌡️ Environmental Context
+            subtitle: Weather and power correlation
+
+          - type: weather-forecast
+            entity: weather.forecast_home
+            show_forecast: true
+            forecast_type: daily
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('weather.forecast_home', 'temperature') }}°C
+                secondary: Current Temp
+                icon: mdi:thermometer
+                icon_color: >
+                  {% set temp = state_attr('weather.forecast_home', 'temperature') | float(0) %}
+                  {% if temp < 0 %}
+                    blue
+                  {% elif temp < 10 %}
+                    cyan
+                  {% elif temp < 20 %}
+                    green
+                  {% elif temp < 25 %}
+                    orange
+                  {% else %}
+                    red
+                  {% endif %}
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('weather.forecast_home', 'humidity') }}%
+                secondary: Humidity
+                icon: mdi:water-percent
+                icon_color: blue
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('weather.forecast_home', 'wind_speed') }} km/h
+                secondary: Wind Speed
+                icon: mdi:weather-windy
+                icon_color: cyan
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ states('weather.forecast_home') | replace('_', ' ') | title }}
+                secondary: Conditions
+                icon: >
+                  {% set condition = states('weather.forecast_home') %}
+                  {% if condition == 'sunny' %}
+                    mdi:weather-sunny
+                  {% elif condition == 'clear-night' %}
+                    mdi:weather-night
+                  {% elif condition == 'partlycloudy' %}
+                    mdi:weather-partly-cloudy
+                  {% elif condition == 'cloudy' %}
+                    mdi:weather-cloudy
+                  {% elif condition == 'rainy' %}
+                    mdi:weather-rainy
+                  {% elif condition == 'snowy' %}
+                    mdi:weather-snowy
+                  {% elif condition == 'fog' %}
+                    mdi:weather-fog
+                  {% else %}
+                    mdi:weather-partly-cloudy
+                  {% endif %}
+                icon_color: >
+                  {% set condition = states('weather.forecast_home') %}
+                  {% if condition == 'sunny' %}
+                    amber
+                  {% elif condition == 'clear-night' %}
+                    deep-purple
+                  {% elif 'cloudy' in condition %}
+                    grey
+                  {% elif condition == 'rainy' %}
+                    blue
+                  {% elif condition == 'snowy' %}
+                    cyan
+                  {% else %}
+                    grey
+                  {% endif %}
+                layout: vertical
+
+          - type: custom:mushroom-template-card
+            primary: >
+              {% set temp = state_attr('weather.forecast_home', 'temperature') | float(0) %}
+              {% if temp < 5 %}
+                Cold weather - expect higher heating usage
+              {% elif temp < 15 %}
+                Cool weather - moderate heating expected
+              {% elif temp < 25 %}
+                Comfortable - minimal climate control needed
+              {% else %}
+                Hot weather - cooling may increase usage
+              {% endif %}
+            secondary: >
+              Outside: {{ state_attr('weather.forecast_home', 'temperature') }}°C |
+              Pressure: {{ state_attr('weather.forecast_home', 'pressure') }} hPa
+            icon: mdi:home-thermometer
+            icon_color: >
+              {% set temp = state_attr('weather.forecast_home', 'temperature') | float(0) %}
+              {% if temp < 10 %}
+                blue
+              {% elif temp < 20 %}
+                green
+              {% else %}
+                orange
+              {% endif %}
+
+          # 7. ADVANCED ANALYTICS
+          - type: custom:mushroom-title-card
+            title: 📈 Power Analytics
+            subtitle: Usage patterns and trends
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.aidon_active_power_import') | float / 1000) | round(2) }} kW
+                secondary: Current Power
+                icon: mdi:flash
+                icon_color: amber
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_usage_status', 'percentage_of_threshold') }}%
+                secondary: Of Threshold
+                icon: mdi:percent
+                icon_color: >
+                  {% set pct = state_attr('sensor.power_usage_status', 'percentage_of_threshold') | float %}
+                  {% if pct > 100 %}
+                    red
+                  {% elif pct > 80 %}
+                    orange
+                  {% else %}
+                    green
+                  {% endif %}
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ state_attr('sensor.power_usage_status', 'total_sheddable_power') }} kW
+                secondary: Sheddable Power
+                icon: mdi:power-plug-off
+                icon_color: blue
+                layout: vertical
+
+          # 8. SYSTEM HEALTH INDICATORS
+          - type: custom:mushroom-title-card
+            title: ⚠️ System Health
+            subtitle: Warnings and alerts
+
+          - type: custom:mushroom-template-card
+            primary: >
+              {% set health = state_attr('sensor.power_analytics', 'system_health') %}
+              {% if health == 'healthy' %}
+                ✅ System Healthy
+              {% elif health == 'caution' %}
+                ⚠️ Caution - Monitor Cycling
+              {% elif health == 'warning' %}
+                🚨 Warning - High Cycling
+              {% else %}
+                ⭕ System Disabled
+              {% endif %}
+            secondary: >
+              {% set max = state_attr('sensor.power_analytics', 'highest_cycle_count') | int %}
+              {% if max > 0 %}
+                {{ state_attr('sensor.power_analytics', 'highest_cycle_device') }}: {{ max }} cycles
+              {% else %}
+                All devices operating normally
+              {% endif %}
+            icon: mdi:heart-pulse
+            icon_color: >
+              {% set health = state_attr('sensor.power_analytics', 'system_health') %}
+              {% if health == 'healthy' %}
+                green
+              {% elif health == 'caution' %}
+                orange
+              {% elif health == 'warning' %}
+                red
+              {% else %}
+                disabled
+              {% endif %}
+            tap_action:
+              action: more-info
+              entity: sensor.power_analytics
+
+          - type: entities
+            title: Health Checks
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.load_shedding_enabled
+                name: Auto Load Shedding
+                icon: mdi:robot
+              - entity: input_boolean.anti_cycling_protection
+                name: Anti-Cycling Protection
+                icon: mdi:sync-alert
+              - entity: input_boolean.smart_shedding_mode
+                name: Smart Shedding Mode
+                icon: mdi:brain
+              - entity: input_boolean.auto_restore_devices
+                name: Auto-Restore Devices
+                icon: mdi:restore
+              - type: divider
+              - entity: sensor.power_usage_status
+                name: Power Status
+                icon: mdi:transmission-tower
+
+          # 9. SMART RECOMMENDATIONS
+          - type: custom:mushroom-title-card
+            title: 🎯 Smart Recommendations
+            subtitle: AI-powered suggestions
+
+          - type: custom:mushroom-template-card
+            primary: >
+              {{ state_attr('sensor.power_analytics', 'recommendation') }}
+            icon: mdi:lightbulb-on
+            icon_color: yellow
+            multiline_secondary: true
+            tap_action:
+              action: none
+
+  # Device Power Consumption Tab
+  - title: Device Power
+    path: device-power
+    icon: mdi:meter-electric
+    type: panel
+    cards:
+      - type: custom:vertical-stack-in-card
+        cards:
+          # Header
+          - type: custom:mushroom-title-card
+            title: 📊 Device Power Consumption
+            subtitle: Real-time power monitoring and cost tracking
+
+          # Summary Cards
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set total = (states('sensor.varmtvannsbereder_power') | float(0)) + (states('sensor.oljeovn_stikk_electric_consumption_w') | float(0)) + (states('sensor.skjot3dprintdiv_electric_consumption_w_2') | float(0)) + (states('sensor.vaskemaskin_strom_power') | float(0)) + (states('sensor.layzspa_wifi_controller_layzspa_power') | float(0)) + (states('sensor.sofakrok_current_power') | float(0)) + (states('input_number.power_draw_mill_wifi_oil') | float(0)) + (states('sensor.varmekabler_bad_power') | float(0)) + (states('sensor.varmekabler_gang_power') | float(0)) + (states('sensor.varmeovn_gjesterom_power') | float(0)) %}
+                  {{ total | round(0) }} W
+                secondary: Total Current Draw
+                icon: mdi:sigma
+                icon_color: blue
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.nord_pool_no1_current_price') | float(0)) | round(2) }} kr/kWh
+                secondary: Current Price
+                icon: mdi:currency-usd
+                icon_color: green
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.nord_pool_no1_current_price
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set total = (states('sensor.varmtvannsbereder_power') | float(0)) + (states('sensor.oljeovn_stikk_electric_consumption_w') | float(0)) + (states('sensor.skjot3dprintdiv_electric_consumption_w_2') | float(0)) + (states('sensor.vaskemaskin_strom_power') | float(0)) + (states('sensor.layzspa_wifi_controller_layzspa_power') | float(0)) + (states('sensor.sofakrok_current_power') | float(0)) + (states('input_number.power_draw_mill_wifi_oil') | float(0)) + (states('sensor.varmekabler_bad_power') | float(0)) + (states('sensor.varmekabler_gang_power') | float(0)) + (states('sensor.varmeovn_gjesterom_power') | float(0)) %}
+                  {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+                  {{ ((total / 1000) * price) | round(2) }} kr/h
+                secondary: Cost Per Hour
+                icon: mdi:cash-clock
+                icon_color: orange
+                layout: vertical
+
+          # Individual Device Cards
+          - type: custom:mushroom-title-card
+            title: Device Details
+            subtitle: Live power consumption and costs
+
+          # Varmtvannsbereder
+          - type: custom:mushroom-template-card
+            entity: sensor.varmtvannsbereder_power
+            primary: Varmtvannsbereder
+            secondary: >
+              {% set power = states('sensor.varmtvannsbereder_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:water-boiler
+            icon_color: blue
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Oljeovn Stikk
+          - type: custom:mushroom-template-card
+            entity: sensor.oljeovn_stikk_electric_consumption_w
+            primary: Oljeovn Stikk
+            secondary: >
+              {% set power = states('sensor.oljeovn_stikk_electric_consumption_w') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:radiator
+            icon_color: orange
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Fryser
+          - type: custom:mushroom-template-card
+            entity: sensor.skjot3dprintdiv_electric_consumption_w_2
+            primary: Fryser
+            secondary: >
+              {% set power = states('sensor.skjot3dprintdiv_electric_consumption_w_2') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:fridge
+            icon_color: red
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Vaskemaskin
+          - type: custom:mushroom-template-card
+            entity: sensor.vaskemaskin_strom_power
+            primary: Vaskemaskin
+            secondary: >
+              {% set power = states('sensor.vaskemaskin_strom_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:washing-machine
+            icon_color: purple
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Hot Tub
+          - type: custom:mushroom-template-card
+            entity: sensor.layzspa_wifi_controller_layzspa_power
+            primary: Hot Tub Heater
+            secondary: >
+              {% set power = states('sensor.layzspa_wifi_controller_layzspa_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:hot-tub
+            icon_color: cyan
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Sofakrok
+          - type: custom:mushroom-template-card
+            entity: sensor.sofakrok_current_power
+            primary: Sofakrok
+            secondary: >
+              {% set power = states('sensor.sofakrok_current_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:sofa
+            icon_color: green
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Mill WiFi Oil (no power sensor, using expected value)
+          - type: custom:mushroom-template-card
+            entity: input_number.power_draw_mill_wifi_oil
+            primary: Mill WiFi Oil
+            secondary: >
+              {% set power = states('input_number.power_draw_mill_wifi_oil') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Expected: {{ power | round(1) }} W (no sensor) | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:radiator
+            icon_color: deep-orange
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Varmekabler Bad
+          - type: custom:mushroom-template-card
+            entity: sensor.varmekabler_bad_power
+            primary: Varmekabler Bad
+            secondary: >
+              {% set power = states('sensor.varmekabler_bad_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:heating-coil
+            icon_color: pink
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Varmekabler Gang
+          - type: custom:mushroom-template-card
+            entity: sensor.varmekabler_gang_power
+            primary: Varmekabler Gang
+            secondary: >
+              {% set power = states('sensor.varmekabler_gang_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:heating-coil
+            icon_color: pink
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Varmeovn Gjesterom
+          - type: custom:mushroom-template-card
+            entity: sensor.varmeovn_gjesterom_power
+            primary: Varmeovn Gjesterom
+            secondary: >
+              {% set power = states('sensor.varmeovn_gjesterom_power') | float(0) %}
+              {% set price = states('sensor.nord_pool_no1_current_price') | float(0) %}
+              {% set hourly_cost = (power / 1000) * price %}
+              {% set daily_cost = hourly_cost * 24 %}
+              Current: {{ power | round(1) }} W | Hourly: {{ hourly_cost | round(2) }} kr | Daily: {{ daily_cost | round(2) }} kr
+            icon: mdi:radiator
+            icon_color: amber
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+
+          # Power History Graph
+          - type: custom:mushroom-title-card
+            title: 📈 Power History (24h)
+
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Device Power Consumption
+              show_states: true
+              colorize_states: true
+            now:
+              show: true
+              color: '#ff0000'
+              label: Now
+            span:
+              start: day
+            yaxis:
+              - id: power
+                min: 0
+                apex_config:
+                  tickAmount: 5
+                  labels:
+                    formatter: |
+                      EVAL:function(value) {
+                        return value.toFixed(0) + ' W';
+                      }
+            series:
+              - entity: sensor.varmtvannsbereder_power
+                name: Varmtvannsbereder
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#2196f3'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.oljeovn_stikk_electric_consumption_w
+                name: Oljeovn
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#ff9800'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.skjot3dprintdiv_electric_consumption_w_2
+                name: Fryser
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#f44336'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.vaskemaskin_strom_power
+                name: Vaskemaskin
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#9c27b0'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.layzspa_wifi_controller_layzspa_power
+                name: Hot Tub
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#00bcd4'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.sofakrok_current_power
+                name: Sofakrok
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#4caf50'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.varmekabler_bad_power
+                name: Floor Bad
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#e91e63'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.varmekabler_gang_power
+                name: Floor Gang
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#ff4081'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.varmeovn_gjesterom_power
+                name: Gjesterom
+                stroke_width: 2
+                type: line
+                curve: smooth
+                color: '#ffc107'
+                show:
+                  legend_value: true
+                group_by:
+                  func: avg
+                  duration: 15min
+
+  # Shed Fairness Dashboard
+  - title: Shed Fairness
+    path: shed-fairness
+    icon: mdi:scale-balance
+    type: panel
+    cards:
+      - type: custom:vertical-stack-in-card
+        cards:
+          # Header
+          - type: custom:mushroom-title-card
+            title: ⚖️ Shed Fairness Monitor
+            subtitle: Track shed burden to ensure fair load distribution
+
+          # Summary Cards
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set total = states('sensor.shed_time_24h_varmtvannsbereder') | float(0) + states('sensor.shed_time_24h_oljeovn_stikk') | float(0) + states('sensor.shed_time_24h_fryser') | float(0) + states('sensor.shed_time_24h_vaskemaskin') | float(0) + states('sensor.shed_time_24h_hot_tub') | float(0) + states('sensor.shed_time_24h_sofakrok') | float(0) + states('sensor.shed_time_24h_mill_wifi_oil') | float(0) + states('sensor.shed_time_24h_varmekabler_bad') | float(0) + states('sensor.shed_time_24h_varmekabler_gang') | float(0) + states('sensor.shed_time_24h_varmeovn_gjesterom') | float(0) %}
+                  {{ total | round(1) }}h
+                secondary: Total Shed Time (24h)
+                icon: mdi:clock-outline
+                icon_color: blue
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set devices = [
+                    {'name': 'VVB', 'hours': states('sensor.shed_time_24h_varmtvannsbereder') | float(0)},
+                    {'name': 'Olje', 'hours': states('sensor.shed_time_24h_oljeovn_stikk') | float(0)},
+                    {'name': 'Fryser', 'hours': states('sensor.shed_time_24h_fryser') | float(0)},
+                    {'name': 'Vaske', 'hours': states('sensor.shed_time_24h_vaskemaskin') | float(0)},
+                    {'name': 'Spa', 'hours': states('sensor.shed_time_24h_hot_tub') | float(0)},
+                    {'name': 'Sofa', 'hours': states('sensor.shed_time_24h_sofakrok') | float(0)},
+                    {'name': 'Mill', 'hours': states('sensor.shed_time_24h_mill_wifi_oil') | float(0)},
+                    {'name': 'FloorB', 'hours': states('sensor.shed_time_24h_varmekabler_bad') | float(0)},
+                    {'name': 'FloorG', 'hours': states('sensor.shed_time_24h_varmekabler_gang') | float(0)},
+                    {'name': 'Gjest', 'hours': states('sensor.shed_time_24h_varmeovn_gjesterom') | float(0)}
+                  ] %}
+                  {% set max_device = devices | sort(attribute='hours', reverse=true) | first %}
+                  {{ max_device.name }}: {{ max_device.hours | round(1) }}h
+                secondary: Most Burdened
+                icon: mdi:emoticon-sad
+                icon_color: red
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set devices = [
+                    {'name': 'VVB', 'hours': states('sensor.shed_time_24h_varmtvannsbereder') | float(0)},
+                    {'name': 'Olje', 'hours': states('sensor.shed_time_24h_oljeovn_stikk') | float(0)},
+                    {'name': 'Fryser', 'hours': states('sensor.shed_time_24h_fryser') | float(0)},
+                    {'name': 'Vaske', 'hours': states('sensor.shed_time_24h_vaskemaskin') | float(0)},
+                    {'name': 'Spa', 'hours': states('sensor.shed_time_24h_hot_tub') | float(0)},
+                    {'name': 'Sofa', 'hours': states('sensor.shed_time_24h_sofakrok') | float(0)},
+                    {'name': 'Mill', 'hours': states('sensor.shed_time_24h_mill_wifi_oil') | float(0)},
+                    {'name': 'FloorB', 'hours': states('sensor.shed_time_24h_varmekabler_bad') | float(0)},
+                    {'name': 'FloorG', 'hours': states('sensor.shed_time_24h_varmekabler_gang') | float(0)},
+                    {'name': 'Gjest', 'hours': states('sensor.shed_time_24h_varmeovn_gjesterom') | float(0)}
+                  ] %}
+                  {% set min_device = devices | sort(attribute='hours') | first %}
+                  {{ min_device.name }}: {{ min_device.hours | round(1) }}h
+                secondary: Least Burdened
+                icon: mdi:emoticon-happy
+                icon_color: green
+                layout: vertical
+
+          # Shed Time Cards
+          - type: custom:mushroom-title-card
+            title: 📊 Shed Time (Last 24 Hours)
+            subtitle: Hours each device was shed - affects shedding priority
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_varmtvannsbereder
+                primary: "{{ states('sensor.shed_time_24h_varmtvannsbereder') | float(0) | round(1) }}h"
+                secondary: VVB
+                icon: mdi:water-boiler
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_varmtvannsbereder') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_oljeovn_stikk
+                primary: "{{ states('sensor.shed_time_24h_oljeovn_stikk') | float(0) | round(1) }}h"
+                secondary: Oljeovn
+                icon: mdi:radiator
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_oljeovn_stikk') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_fryser
+                primary: "{{ states('sensor.shed_time_24h_fryser') | float(0) | round(1) }}h"
+                secondary: Fryser
+                icon: mdi:fridge
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_fryser') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_vaskemaskin
+                primary: "{{ states('sensor.shed_time_24h_vaskemaskin') | float(0) | round(1) }}h"
+                secondary: Vaske
+                icon: mdi:washing-machine
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_vaskemaskin') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_hot_tub
+                primary: "{{ states('sensor.shed_time_24h_hot_tub') | float(0) | round(1) }}h"
+                secondary: Spa
+                icon: mdi:hot-tub
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_hot_tub') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_sofakrok
+                primary: "{{ states('sensor.shed_time_24h_sofakrok') | float(0) | round(1) }}h"
+                secondary: Sofakrok
+                icon: mdi:sofa
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_sofakrok') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_mill_wifi_oil
+                primary: "{{ states('sensor.shed_time_24h_mill_wifi_oil') | float(0) | round(1) }}h"
+                secondary: Mill
+                icon: mdi:radiator
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_mill_wifi_oil') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_varmekabler_bad
+                primary: "{{ states('sensor.shed_time_24h_varmekabler_bad') | float(0) | round(1) }}h"
+                secondary: Floor Bad
+                icon: mdi:heating-coil
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_varmekabler_bad') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_varmekabler_gang
+                primary: "{{ states('sensor.shed_time_24h_varmekabler_gang') | float(0) | round(1) }}h"
+                secondary: Floor Gang
+                icon: mdi:heating-coil
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_varmekabler_gang') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.shed_time_24h_varmeovn_gjesterom
+                primary: "{{ states('sensor.shed_time_24h_varmeovn_gjesterom') | float(0) | round(1) }}h"
+                secondary: Gjesterom
+                icon: mdi:radiator
+                icon_color: >
+                  {% set h = states('sensor.shed_time_24h_varmeovn_gjesterom') | float(0) %}
+                  {% if h >= 4 %}red{% elif h >= 2 %}orange{% elif h >= 1 %}yellow{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+          # Burden Explanation
+          - type: custom:mushroom-title-card
+            title: 🎯 Effective Priority
+            subtitle: Base priority + burden (max +5 from shed time)
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_varmtvannsbereder') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_varmtvannsbereder') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: VVB
+                icon: mdi:water-boiler
+                icon_color: blue
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_oljeovn_stikk') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_oljeovn_stikk') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Oljeovn
+                icon: mdi:radiator
+                icon_color: orange
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_fryser') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_fryser') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Fryser
+                icon: mdi:fridge
+                icon_color: red
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_vaskemaskin') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_vaskemaskin') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Vaske
+                icon: mdi:washing-machine
+                icon_color: purple
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_layzspa_heat') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_hot_tub') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Spa
+                icon: mdi:hot-tub
+                icon_color: cyan
+                layout: vertical
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_sofakrok') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_sofakrok') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Sofakrok
+                icon: mdi:sofa
+                icon_color: green
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_mill_wifi_oil') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_mill_wifi_oil') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Mill
+                icon: mdi:radiator
+                icon_color: deep-orange
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_varmekabler_bad') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_varmekabler_bad') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Floor Bad
+                icon: mdi:heating-coil
+                icon_color: pink
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_varmekabler_gang') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_varmekabler_gang') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Floor Gang
+                icon: mdi:heating-coil
+                icon_color: pink
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set base = states('input_number.priority_varmeovn_gjesterom') | int %}
+                  {% set burden = [5, states('sensor.shed_time_24h_varmeovn_gjesterom') | float(0) | int] | min %}
+                  {{ base }}+{{ burden }}={{ base + burden }}
+                secondary: Gjesterom
+                icon: mdi:radiator
+                icon_color: amber
+                layout: vertical
+
+          # How it works
+          - type: markdown
+            content: |
+              ### How Shed Fairness Works
+
+              Each device's **effective priority** = base priority + burden
+
+              **Burden** = hours shed in last 24h (max +5)
+
+              | Shed Time | Burden | Effect |
+              |-----------|--------|--------|
+              | 0-1h | +0 | Normal priority |
+              | 1-2h | +1 | Slightly protected |
+              | 2-3h | +2 | Moderately protected |
+              | 3-4h | +3 | Well protected |
+              | 4-5h | +4 | Highly protected |
+              | 5h+ | +5 | Maximum protection |
+
+              **Lower effective priority = shed first**
+
+              This ensures devices that have been shed a lot get a break while others take their turn.
+
+  # Climate & Comfort Dashboard
+  - title: Climate
+    path: climate
+    icon: mdi:thermometer
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: custom:mushroom-title-card
+            title: 🌡️ Climate & Comfort
+            subtitle: Temperature and humidity across all rooms
+
+          # Temperature Overview
+          - type: custom:mushroom-title-card
+            title: Room Temperatures
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.aqara_stue_temperature
+                primary: "{{ states('sensor.aqara_stue_temperature') }}°C"
+                secondary: Stue
+                icon: mdi:sofa
+                icon_color: >
+                  {% set temp = states('sensor.aqara_stue_temperature') | float(0) %}
+                  {% if temp < 18 %}blue{% elif temp < 22 %}green{% else %}orange{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.soverom_temperature
+                primary: "{{ states('sensor.soverom_temperature') }}°C"
+                secondary: Soverom
+                icon: mdi:bed
+                icon_color: >
+                  {% set temp = states('sensor.soverom_temperature') | float(0) %}
+                  {% if temp < 16 %}blue{% elif temp < 20 %}green{% else %}orange{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.kontor_temperature
+                primary: "{{ states('sensor.kontor_temperature') }}°C"
+                secondary: Kontor
+                icon: mdi:desk
+                icon_color: >
+                  {% set temp = states('sensor.kontor_temperature') | float(0) %}
+                  {% if temp < 18 %}blue{% elif temp < 22 %}green{% else %}orange{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.badet_temperature
+                primary: "{{ states('sensor.badet_temperature') }}°C"
+                secondary: Bad
+                icon: mdi:shower
+                icon_color: >
+                  {% set temp = states('sensor.badet_temperature') | float(0) %}
+                  {% if temp < 20 %}blue{% elif temp < 24 %}green{% else %}orange{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.kjeller_temperature
+                primary: "{{ states('sensor.kjeller_temperature') }}°C"
+                secondary: Kjeller
+                icon: mdi:home-floor-b
+                icon_color: >
+                  {% set temp = states('sensor.kjeller_temperature') | float(0) %}
+                  {% if temp < 18 %}blue{% elif temp < 22 %}green{% else %}orange{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.ytterdor_temperature
+                primary: "{{ states('sensor.ytterdor_temperature') }}°C"
+                secondary: Ute
+                icon: mdi:home-export-outline
+                icon_color: >
+                  {% set temp = states('sensor.ytterdor_temperature') | float(0) %}
+                  {% if temp < 0 %}blue{% elif temp < 10 %}cyan{% elif temp < 20 %}green{% else %}orange{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.fryser_temperature
+                primary: "{{ states('sensor.fryser_temperature') }}°C"
+                secondary: Fryser
+                icon: mdi:fridge-industrial
+                icon_color: >
+                  {% set temp = states('sensor.fryser_temperature') | float(0) %}
+                  {% if temp < -20 %}green{% elif temp < -15 %}orange{% else %}red{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.aqara_stue_temperature
+                primary: >
+                  {% set indoor = states('sensor.aqara_stue_temperature') | float(0) %}
+                  {% set outdoor = states('sensor.ytterdor_temperature') | float(0) %}
+                  {{ (indoor - outdoor) | round(1) }}°C
+                secondary: In/Out Diff
+                icon: mdi:swap-vertical
+                icon_color: amber
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+          # Humidity Overview
+          - type: custom:mushroom-title-card
+            title: Humidity Levels
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.aqara_stue_humidity
+                primary: "{{ states('sensor.aqara_stue_humidity') | round(0) }}%"
+                secondary: Stue
+                icon: mdi:water-percent
+                icon_color: >
+                  {% set hum = states('sensor.aqara_stue_humidity') | float(0) %}
+                  {% if hum < 30 %}orange{% elif hum < 60 %}green{% else %}blue{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.soverom_humidity
+                primary: "{{ states('sensor.soverom_humidity') | round(0) }}%"
+                secondary: Soverom
+                icon: mdi:water-percent
+                icon_color: >
+                  {% set hum = states('sensor.soverom_humidity') | float(0) %}
+                  {% if hum < 30 %}orange{% elif hum < 60 %}green{% else %}blue{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.kontor_humidity
+                primary: "{{ states('sensor.kontor_humidity') | round(0) }}%"
+                secondary: Kontor
+                icon: mdi:water-percent
+                icon_color: >
+                  {% set hum = states('sensor.kontor_humidity') | float(0) %}
+                  {% if hum < 30 %}orange{% elif hum < 60 %}green{% else %}blue{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.badet_humidity
+                primary: "{{ states('sensor.badet_humidity') | round(0) }}%"
+                secondary: Bad
+                icon: mdi:water-percent
+                icon_color: >
+                  {% set hum = states('sensor.badet_humidity') | float(0) %}
+                  {% if hum < 30 %}orange{% elif hum < 60 %}green{% else %}blue{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+          # Climate Controls
+          - type: custom:mushroom-title-card
+            title: Thermostat Controls
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-climate-card
+                entity: climate.sofakrok
+                name: Sofakrok
+                icon: mdi:sofa
+                show_temperature_control: true
+                hvac_modes:
+                  - heat
+                  - 'off'
+              - type: custom:mushroom-climate-card
+                entity: climate.stue_oljeovn
+                name: Stue Oljeovn
+                icon: mdi:radiator
+                show_temperature_control: true
+                hvac_modes:
+                  - heat
+                  - 'off'
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-climate-card
+                entity: climate.oljeovn_kjeller
+                name: Kjeller Oljeovn
+                icon: mdi:radiator
+                show_temperature_control: true
+                hvac_modes:
+                  - heat
+                  - 'off'
+              - type: custom:mushroom-climate-card
+                entity: climate.mill_wi_fi_oil
+                name: Mill Panel
+                icon: mdi:radiator
+                show_temperature_control: true
+                hvac_modes:
+                  - heat
+                  - 'off'
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-climate-card
+                entity: climate.varmekabler_bad
+                name: Gulvvarme Bad
+                icon: mdi:heating-coil
+                show_temperature_control: true
+                hvac_modes:
+                  - heat
+                  - 'off'
+              - type: custom:mushroom-climate-card
+                entity: climate.varmekabler_gang
+                name: Gulvvarme Gang
+                icon: mdi:heating-coil
+                show_temperature_control: true
+                hvac_modes:
+                  - heat
+                  - 'off'
+
+          # Temperature History
+          - type: custom:mushroom-title-card
+            title: Temperature History (24h)
+
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Room Temperatures
+              show_states: true
+              colorize_states: true
+            yaxis:
+              - id: temp
+                min: 10
+                max: 30
+                apex_config:
+                  tickAmount: 4
+            series:
+              - entity: sensor.aqara_stue_temperature
+                name: Stue
+                stroke_width: 2
+                color: '#ff9800'
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.soverom_temperature
+                name: Soverom
+                stroke_width: 2
+                color: '#2196f3'
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.kontor_temperature
+                name: Kontor
+                stroke_width: 2
+                color: '#4caf50'
+                group_by:
+                  func: avg
+                  duration: 15min
+              - entity: sensor.ytterdor_temperature
+                name: Ute
+                stroke_width: 2
+                color: '#9c27b0'
+                group_by:
+                  func: avg
+                  duration: 15min
+
+  # Robot Vacuum Dashboard
+  - title: Vacuum
+    path: vacuum
+    icon: mdi:robot-vacuum
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: custom:mushroom-title-card
+            title: 🤖 Robot Vacuum
+            subtitle: Dreame X50 Ultra control and status
+
+          # Main Vacuum Card
+          - type: custom:mushroom-vacuum-card
+            entity: vacuum.x50_ultra
+            name: X50 Ultra
+            icon: mdi:robot-vacuum
+            commands:
+              - start_pause
+              - stop
+              - return_home
+              - locate
+            fill_container: true
+
+          # Status Cards
+          - type: custom:mushroom-title-card
+            title: Status
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: "{{ states('vacuum.x50_ultra') | title }}"
+                secondary: Status
+                icon: >
+                  {% set state = states('vacuum.x50_ultra') %}
+                  {% if state == 'docked' %}
+                    mdi:robot-vacuum-off
+                  {% elif state == 'cleaning' %}
+                    mdi:robot-vacuum
+                  {% elif state == 'returning' %}
+                    mdi:home-import-outline
+                  {% else %}
+                    mdi:robot-vacuum-variant
+                  {% endif %}
+                icon_color: >
+                  {% set state = states('vacuum.x50_ultra') %}
+                  {% if state == 'docked' %}green{% elif state == 'cleaning' %}blue{% elif state == 'error' %}red{% else %}orange{% endif %}
+                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: "{{ state_attr('vacuum.x50_ultra', 'battery_level') | default(0) }}%"
+                secondary: Battery
+                icon: >
+                  {% set level = state_attr('vacuum.x50_ultra', 'battery_level') | int(0) %}
+                  {% if level > 80 %}mdi:battery-high
+                  {% elif level > 40 %}mdi:battery-medium
+                  {% else %}mdi:battery-low
+                  {% endif %}
+                icon_color: >
+                  {% set level = state_attr('vacuum.x50_ultra', 'battery_level') | int(0) %}
+                  {% if level > 60 %}green{% elif level > 20 %}orange{% else %}red{% endif %}
+                layout: vertical
+
+          # Feature Toggles
+          - type: custom:mushroom-title-card
+            title: Features & Maintenance
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.x50_ultra_auto_drying
+                name: Auto Dry
+                icon: mdi:tumble-dryer
+                layout: vertical
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-entity-card
+                entity: switch.x50_ultra_self_clean
+                name: Self Clean
+                icon: mdi:spray-bottle
+                layout: vertical
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-entity-card
+                entity: switch.x50_ultra_uv_sterilization
+                name: UV Sterilize
+                icon: mdi:lightbulb-on
+                layout: vertical
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-entity-card
+                entity: switch.x50_ultra_silent_drying
+                name: Silent Dry
+                icon: mdi:volume-off
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.x50_ultra_cleaning_sequence
+                name: Clean Sequence
+                icon: mdi:order-bool-ascending
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+  # Appliances & Infrastructure Dashboard
+  - title: Appliances
+    path: appliances
+    icon: mdi:washing-machine
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: custom:mushroom-title-card
+            title: 🔌 Appliances & Infrastructure
+            subtitle: Monitoring and control of home systems
+
+          # Major Appliances
+          - type: custom:mushroom-title-card
+            title: Major Appliances
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: switch.varmtvannsbereder
+                primary: Varmtvannsbereder
+                secondary: "{{ states('switch.varmtvannsbereder') | title }}"
+                icon: mdi:water-boiler
+                icon_color: >
+                  {{ 'red' if is_state('switch.varmtvannsbereder', 'on') else 'grey' }}
+                layout: vertical
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.vaskemaskin_strom
+                primary: Vaskemaskin
+                secondary: "{{ states('switch.vaskemaskin_strom') | title }}"
+                icon: mdi:washing-machine
+                icon_color: >
+                  {{ 'blue' if is_state('switch.vaskemaskin_strom', 'on') else 'grey' }}
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: switch.fryser
+                primary: Fryser
+                secondary: "{{ states('sensor.fryser_temperature') }}°C"
+                icon: mdi:fridge-industrial
+                icon_color: >
+                  {% set temp = states('sensor.fryser_temperature') | float(0) %}
+                  {% if temp < -20 %}green{% elif temp < -15 %}orange{% else %}red{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: switch.kjeller_server
+                primary: Server
+                secondary: "{{ states('switch.kjeller_server') | title }}"
+                icon: mdi:server
+                icon_color: >
+                  {{ 'green' if is_state('switch.kjeller_server', 'on') else 'red' }}
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+          # Freezer Monitoring
+          - type: custom:mushroom-title-card
+            title: Freezer Temperature
+
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Freezer Temperature (24h)
+              show_states: true
+              colorize_states: true
+            yaxis:
+              - id: temp
+                min: -35
+                max: -15
+            series:
+              - entity: sensor.fryser_temperature
+                name: Fryser
+                stroke_width: 2
+                color: '#00bcd4'
+                group_by:
+                  func: avg
+                  duration: 15min
+
+          # Network Infrastructure
+          - type: custom:mushroom-title-card
+            title: Network Infrastructure
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: light.u7_pro_led
+                name: U7 Pro
+                icon: mdi:access-point
+                layout: vertical
+              - type: custom:mushroom-entity-card
+                entity: light.u7_pro_xg_led
+                name: U7 Pro XG
+                icon: mdi:access-point
+                layout: vertical
+              - type: custom:mushroom-entity-card
+                entity: light.u7_lite_led
+                name: U7 Lite
+                icon: mdi:access-point
+                layout: vertical
+              - type: custom:mushroom-entity-card
+                entity: light.u7_long_range_led
+                name: U7 LR
+                icon: mdi:access-point
+                layout: vertical
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: light.ac_pro_led
+                name: AC Pro
+                icon: mdi:access-point
+                layout: vertical
+              - type: custom:mushroom-entity-card
+                entity: light.ac_lr_led
+                name: AC LR
+                icon: mdi:access-point
+                layout: vertical
+
+          # Zigbee Network
+          - type: custom:mushroom-title-card
+            title: Zigbee Network
+
+          - type: custom:mushroom-entity-card
+            entity: switch.zigbee2mqtt_bridge_permit_join
+            name: Zigbee2MQTT Permit Join
+            icon: mdi:zigbee
+            tap_action:
+              action: toggle
+
+          # Garage
+          - type: custom:mushroom-title-card
+            title: Garage
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.ratgdo_door
+                name: Garage Door
+                icon: mdi:garage
+                show_buttons_control: true
+                show_position_control: false
+              - type: custom:mushroom-entity-card
+                entity: light.ratgdo_light
+                name: Garage Light
+                icon: mdi:lightbulb
+                layout: vertical
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: binary_sensor.ratgdo_motion
+                primary: Motion
+                secondary: "{{ states('binary_sensor.ratgdo_motion') | title }}"
+                icon: mdi:motion-sensor
+                icon_color: >
+                  {{ 'red' if is_state('binary_sensor.ratgdo_motion', 'on') else 'grey' }}
+                layout: vertical

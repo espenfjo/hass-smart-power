@@ -1,0 +1,1012 @@
+- id: '1767212791296'
+  alias: Power Usage Monitor - Load Shedding
+  description: Smart load shedding - protects NEXT tier threshold (if day is "lost",
+    protects the next tier up)
+  triggers:
+  - entity_id: sensor.smart_shedding_required
+    to: 'True'
+    trigger: state
+    id: smart_shedding_triggered
+  - trigger: time_pattern
+    minutes: /2
+    id: periodic_recheck
+  conditions:
+  - condition: state
+    entity_id: input_boolean.load_shedding_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{{ is_state(''sensor.smart_shedding_required'', ''True'') }}'
+  actions:
+  - variables:
+      current_power: '{{ states(''sensor.aidon_active_power_import'') | float(0) }}'
+      projected_power: '{{ states(''sensor.projected_hourly_power'') | float(0) }}'
+      next_tier_threshold: '{{ states(''sensor.next_tier_threshold'') | float(5000)
+        }}'
+      todays_peak: '{{ states(''input_number.todays_peak_power'') | float(0) }}'
+      trigger_pct: '{% set minutes = now().minute %} {% if minutes < 15 %}0.95 {%
+        elif minutes < 30 %}0.97 {% elif minutes < 45 %}0.98 {% else %}0.99{% endif
+        %}
+
+        '
+      trigger_threshold: '{{ (next_tier_threshold * (trigger_pct | float)) | int }}'
+      power_to_reduce: '{{ (projected_power - trigger_threshold) | int }}'
+      minutes_remaining: '{{ 60 - now().minute }}'
+      smart_mode: '{{ is_state(''input_boolean.smart_shedding_mode'', ''on'') }}'
+      day_lost: '{{ state_attr(''sensor.next_tier_threshold'', ''day_already_lost'')
+        }}'
+      devices_to_shed: "{% set ns = namespace(devices=[]) %}\n{# Varmtvannsbereder
+        #}\n{% if is_state('input_boolean.load_shedding_varmtvannsbereder', 'on')
+        and is_state('switch.varmtvannsbereder', 'on') %}\n  {% set base_pri = states('input_number.priority_varmtvannsbereder')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_varmtvannsbereder')
+        | float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'switch.varmtvannsbereder', 'name': 'Varmtvannsbereder', 'priority': base_pri
+        + burden, 'base_priority': base_pri, 'burden': burden, 'power': states('input_number.power_draw_varmtvannsbereder')
+        | int, 'domain': 'switch'}] %}\n{% endif %}\n{# Oljeovn Stikk #}\n{% if is_state('input_boolean.load_shedding_oljeovn_stikk',
+        'on') and is_state('switch.oljeovn_stikk', 'on') %}\n  {% set base_pri = states('input_number.priority_oljeovn_stikk')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_oljeovn_stikk')
+        | float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'switch.oljeovn_stikk', 'name': 'Oljeovn Stikk', 'priority': base_pri + burden,
+        'base_priority': base_pri, 'burden': burden, 'power': states('input_number.power_draw_oljeovn_stikk')
+        | int, 'domain': 'switch'}] %}\n{% endif %}\n{# Fryser #}\n{% if is_state('input_boolean.load_shedding_fryser',
+        'on') and is_state('switch.fryser', 'on') %}\n  {% set base_pri = states('input_number.priority_fryser')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_fryser') | float(0))
+        | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity': 'switch.fryser',
+        'name': 'Fryser', 'priority': base_pri + burden, 'base_priority': base_pri,
+        'burden': burden, 'power': states('input_number.power_draw_fryser') | int,
+        'domain': 'switch'}] %}\n{% endif %}\n{# Vaskemaskin #}\n{% if is_state('input_boolean.load_shedding_vaskemaskin',
+        'on') and is_state('switch.vaskemaskin_strom', 'on') %}\n  {% set base_pri
+        = states('input_number.priority_vaskemaskin') | int %}\n  {% set burden =
+        [5, (states('sensor.shed_time_24h_vaskemaskin') | float(0)) | int] | min %}\n
+        \ {% set ns.devices = ns.devices + [{'entity': 'switch.vaskemaskin_strom',
+        'name': 'Vaskemaskin', 'priority': base_pri + burden, 'base_priority': base_pri,
+        'burden': burden, 'power': states('input_number.power_draw_vaskemaskin') |
+        int, 'domain': 'switch'}] %}\n{% endif %}\n{# Hot Tub #}\n{% if is_state('input_boolean.load_shedding_layzspa_heat',
+        'on') and is_state('switch.layzspa_wifi_controller_layzspa_heat_regulation',
+        'on') %}\n  {% set base_pri = states('input_number.priority_layzspa_heat')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_hot_tub') |
+        float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'switch.layzspa_wifi_controller_layzspa_heat_regulation', 'name': 'Hot Tub
+        Heater', 'priority': base_pri + burden, 'base_priority': base_pri, 'burden':
+        burden, 'power': states('input_number.power_draw_layzspa_heat') | int, 'domain':
+        'switch'}] %}\n{% endif %}\n{# Sofakrok #}\n{% if is_state('input_boolean.load_shedding_sofakrok',
+        'on') and not is_state('climate.sofakrok', 'off') %}\n  {% set base_pri =
+        states('input_number.priority_sofakrok') | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_sofakrok')
+        | float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'climate.sofakrok', 'name': 'Sofakrok', 'priority': base_pri + burden, 'base_priority':
+        base_pri, 'burden': burden, 'power': states('input_number.power_draw_sofakrok')
+        | int, 'domain': 'climate'}] %}\n{% endif %}\n{# Mill WiFi Oil #}\n{% if is_state('input_boolean.load_shedding_mill_wifi_oil',
+        'on') and not is_state('climate.mill_wi_fi_oil', 'off') %}\n  {% set base_pri
+        = states('input_number.priority_mill_wifi_oil') | int %}\n  {% set burden
+        = [5, (states('sensor.shed_time_24h_mill_wifi_oil') | float(0)) | int] | min
+        %}\n  {% set ns.devices = ns.devices + [{'entity': 'climate.mill_wi_fi_oil',
+        'name': 'Mill WiFi Oil', 'priority': base_pri + burden, 'base_priority': base_pri,
+        'burden': burden, 'power': states('input_number.power_draw_mill_wifi_oil')
+        | int, 'domain': 'climate'}] %}\n{% endif %}\n{# Varmekabler Bad #}\n{% if
+        is_state('input_boolean.load_shedding_varmekabler_bad', 'on') and not is_state('climate.varmekabler_bad',
+        'off') %}\n  {% set base_pri = states('input_number.priority_varmekabler_bad')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_varmekabler_bad')
+        | float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'climate.varmekabler_bad', 'name': 'Varmekabler Bad', 'priority': base_pri
+        + burden, 'base_priority': base_pri, 'burden': burden, 'power': states('input_number.power_draw_varmekabler_bad')
+        | int, 'domain': 'climate'}] %}\n{% endif %}\n{# Varmekabler Gang #}\n{% if
+        is_state('input_boolean.load_shedding_varmekabler_gang', 'on') and not is_state('climate.varmekabler_gang',
+        'off') %}\n  {% set base_pri = states('input_number.priority_varmekabler_gang')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_varmekabler_gang')
+        | float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'climate.varmekabler_gang', 'name': 'Varmekabler Gang', 'priority': base_pri
+        + burden, 'base_priority': base_pri, 'burden': burden, 'power': states('input_number.power_draw_varmekabler_gang')
+        | int, 'domain': 'climate'}] %}\n{% endif %}\n{# Varmeovn Gjesterom #}\n{%
+        if is_state('input_boolean.load_shedding_varmeovn_gjesterom', 'on') and is_state('switch.varmeovn_gjesterom',
+        'on') %}\n  {% set base_pri = states('input_number.priority_varmeovn_gjesterom')
+        | int %}\n  {% set burden = [5, (states('sensor.shed_time_24h_varmeovn_gjesterom')
+        | float(0)) | int] | min %}\n  {% set ns.devices = ns.devices + [{'entity':
+        'switch.varmeovn_gjesterom', 'name': 'Varmeovn Gjesterom', 'priority': base_pri
+        + burden, 'base_priority': base_pri, 'burden': burden, 'power': states('input_number.power_draw_varmeovn_gjesterom')
+        | int, 'domain': 'switch'}] %}\n{% endif %}\n{# Sort by power (high first)
+        then by effective priority (low first) #}\n{% set sorted_devices = ns.devices
+        | sort(attribute='power', reverse=true) | sort(attribute='priority') %}\n{%
+        if is_state('input_boolean.smart_shedding_mode', 'on') %}\n  {% set current
+        = states('sensor.aidon_active_power_import') | float(0) %}\n  {% set threshold
+        = states('sensor.next_tier_threshold') | float(5000) %}\n  {% set to_reduce
+        = current - threshold %}\n  {% set ns2 = namespace(result=[], power=0) %}\n
+        \ {% for device in sorted_devices %}\n    {% if ns2.power < to_reduce %}\n
+        \     {% set ns2.result = ns2.result + [device] %}\n      {% set ns2.power
+        = ns2.power + device.power %}\n    {% endif %}\n  {% endfor %}\n  {{ ns2.result
+        }}\n{% else %}\n  {{ sorted_devices }}\n{% endif %}\n"
+  - repeat:
+      for_each: '{{ devices_to_shed }}'
+      sequence:
+      - target:
+          entity_id: '{{ repeat.item.entity }}'
+        action: '{{ repeat.item.domain }}.turn_off'
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''switch.varmtvannsbereder''
+              }}'
+          sequence:
+          - target:
+              entity_id: input_boolean.was_shed_varmtvannsbereder
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''switch.oljeovn_stikk'' }}'
+          sequence:
+          - target:
+              entity_id: input_boolean.was_shed_oljeovn_stikk
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''switch.fryser'' }}'
+          sequence:
+          - target:
+              entity_id: input_boolean.was_shed_fryser
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''switch.vaskemaskin_strom''
+              }}'
+          sequence:
+          - target:
+              entity_id: input_boolean.was_shed_vaskemaskin
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''switch.layzspa_wifi_controller_layzspa_heat_regulation''
+              }}'
+          sequence:
+          - target:
+              entity_id: input_boolean.was_shed_layzspa_heat
+            action: input_boolean.turn_on
+          - target:
+              entity_id: switch.layzspa_wifi_controller_layzspa_pump
+            action: switch.turn_off
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''climate.sofakrok'' }}'
+          sequence:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.previous_hvac_mode_sofakrok
+            data:
+              value: '{{ states(''climate.sofakrok'') }}'
+          - target:
+              entity_id: input_boolean.was_shed_sofakrok
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''climate.mill_wi_fi_oil'' }}'
+          sequence:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.previous_hvac_mode_mill_wifi_oil
+            data:
+              value: '{{ states(''climate.mill_wi_fi_oil'') }}'
+          - target:
+              entity_id: input_boolean.was_shed_mill_wifi_oil
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''climate.varmekabler_bad''
+              }}'
+          sequence:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.previous_hvac_mode_varmekabler_bad
+            data:
+              value: '{{ states(''climate.varmekabler_bad'') }}'
+          - target:
+              entity_id: input_boolean.was_shed_varmekabler_bad
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''climate.varmekabler_gang''
+              }}'
+          sequence:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.previous_hvac_mode_varmekabler_gang
+            data:
+              value: '{{ states(''climate.varmekabler_gang'') }}'
+          - target:
+              entity_id: input_boolean.was_shed_varmekabler_gang
+            action: input_boolean.turn_on
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.entity == ''switch.varmeovn_gjesterom''
+              }}'
+          sequence:
+          - target:
+              entity_id: input_boolean.was_shed_varmeovn_gjesterom
+            action: input_boolean.turn_on
+      - delay:
+          seconds: 2
+  - condition: template
+    value_template: '{{ devices_to_shed | length > 0 }}'
+  - action: notify.mobile_app_sm_g998b
+    data:
+      title: "\U0001F50C Hourly Load Shedding"
+      message: "{% if smart_mode %}Smart mode: Shed minimum devices{% else %}Priority
+        mode: Shed all{% endif %}\n  Projected: {{ (projected_power / 1000) | round(2)
+        }} kW \n  Target: {{ (trigger_threshold / 1000) | round(2) }} kW ({{ (trigger_pct
+        | float * 100) | int }}% of {{ (next_tier_threshold / 1000) | round(0) }}
+        kW) \n  Time left: {{ minutes_remaining }} min\n\nDevices turned off: \n{%
+        for device in devices_to_shed %} \n  - {{ device.name }} (~{{ (device.power
+        / 1000) | round(1) }} kW) \n{% endfor %}\n\nExpected reduction: {{ (devices_to_shed
+        | sum(attribute='power') / 1000) | round(2) }} kW\n"
+  - action: persistent_notification.create
+    data:
+      title: "\U0001F50C Hourly Load Shedding"
+      notification_id: power_load_shedding
+      message: "{% if smart_mode %}Smart mode: Shed minimum devices{% else %}Priority
+        mode: Shed all{% endif %}\n\nProjected: {{ (projected_power / 1000) | round(2)
+        }} kW \n\nTarget: {{ (trigger_threshold / 1000) | round(2) }} kW ({{ (trigger_pct
+        | float * 100) | int }}% of {{ (next_tier_threshold / 1000) | round(0) }}
+        kW) \nTime left: {{ minutes_remaining }} min\n\nDevices turned off: {% for
+        device in devices_to_shed %} \n  - {{ device.name }} (~{{ (device.power /
+        1000) | round(1) }} kW) \n{% endfor %}\n\nExpected reduction: {{ (devices_to_shed
+        | sum(attribute='power') / 1000) | round(2) }} kW\n"
+  mode: single
+  max_exceeded: silent
+- id: '1767212920198'
+  alias: Power Management - Record Restore Times
+  description: Track when devices are restored
+  triggers:
+  - entity_id:
+    - switch.varmtvannsbereder
+    - switch.oljeovn_stikk
+    - switch.fryser
+    - switch.vaskemaskin_strom
+    - switch.layzspa_wifi_controller_layzspa_heat_regulation
+    - climate.sofakrok
+    - climate.mill_wi_fi_oil
+    - climate.varmekabler_bad
+    - climate.varmekabler_gang
+    - switch.varmeovn_gjesterom
+    to: 'on'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.anti_cycling_protection
+    state: 'on'
+  actions:
+  - variables:
+      device_map:
+        switch.varmtvannsbereder:
+          last_restore: input_datetime.last_restore_varmtvannsbereder
+        switch.oljeovn_stikk:
+          last_restore: input_datetime.last_restore_oljeovn_stikk
+        switch.fryser:
+          last_restore: input_datetime.last_restore_fryser
+        switch.vaskemaskin_strom:
+          last_restore: input_datetime.last_restore_vaskemaskin
+        switch.layzspa_wifi_controller_layzspa_heat_regulation:
+          last_restore: input_datetime.last_restore_layzspa_heat
+        climate.sofakrok:
+          last_restore: input_datetime.last_restore_sofakrok
+        climate.mill_wi_fi_oil:
+          last_restore: input_datetime.last_restore_mill_wifi_oil
+        climate.varmekabler_bad:
+          last_restore: input_datetime.last_restore_varmekabler_bad
+        climate.varmekabler_gang:
+          last_restore: input_datetime.last_restore_varmekabler_gang
+        switch.varmeovn_gjesterom:
+          last_restore: input_datetime.last_restore_varmeovn_gjesterom
+      last_restore_entity: '{{ device_map[trigger.entity_id].last_restore }}'
+  - target:
+      entity_id: '{{ last_restore_entity }}'
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+    action: input_datetime.set_datetime
+  mode: queued
+- id: '1767212932261'
+  alias: Power Management - Record Shed Times
+  description: Track when devices are shed and increment cycle counter if rapid cycling
+  triggers:
+  - entity_id:
+    - switch.varmtvannsbereder
+    - switch.oljeovn_stikk
+    - switch.fryser
+    - switch.vaskemaskin_strom
+    - switch.layzspa_wifi_controller_layzspa_heat_regulation
+    - climate.sofakrok
+    - climate.mill_wi_fi_oil
+    - climate.varmekabler_bad
+    - climate.varmekabler_gang
+    - switch.varmeovn_gjesterom
+    to: 'off'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.anti_cycling_protection
+    state: 'on'
+  - condition: template
+    value_template: '{{ is_state(''sensor.smart_shedding_required'', ''True'') }}'
+  - condition: state
+    entity_id: input_boolean.load_shedding_enabled
+    state: 'on'
+  actions:
+  - variables:
+      device_map:
+        switch.varmtvannsbereder:
+          last_shed: input_datetime.last_shed_varmtvannsbereder
+          cycle_count: input_number.cycle_count_varmtvannsbereder
+          total_sheds: input_number.total_sheds_varmtvannsbereder
+        switch.oljeovn_stikk:
+          last_shed: input_datetime.last_shed_oljeovn_stikk
+          cycle_count: input_number.cycle_count_oljeovn_stikk
+          total_sheds: input_number.total_sheds_oljeovn_stikk
+        switch.fryser:
+          last_shed: input_datetime.last_shed_fryser
+          cycle_count: input_number.cycle_count_fryser
+          total_sheds: input_number.total_sheds_fryser
+        switch.vaskemaskin_strom:
+          last_shed: input_datetime.last_shed_vaskemaskin
+          cycle_count: input_number.cycle_count_vaskemaskin
+          total_sheds: input_number.total_sheds_vaskemaskin
+        switch.layzspa_wifi_controller_layzspa_heat_regulation:
+          last_shed: input_datetime.last_shed_layzspa_heat
+          cycle_count: input_number.cycle_count_layzspa_heat
+          total_sheds: input_number.total_sheds_layzspa_heat
+        climate.sofakrok:
+          last_shed: input_datetime.last_shed_sofakrok
+          cycle_count: input_number.cycle_count_sofakrok
+          total_sheds: input_number.total_sheds_sofakrok
+        climate.mill_wi_fi_oil:
+          last_shed: input_datetime.last_shed_mill_wifi_oil
+          cycle_count: input_number.cycle_count_mill_wifi_oil
+          total_sheds: input_number.total_sheds_mill_wifi_oil
+        climate.varmekabler_bad:
+          last_shed: input_datetime.last_shed_varmekabler_bad
+          cycle_count: input_number.cycle_count_varmekabler_bad
+          total_sheds: input_number.total_sheds_varmekabler_bad
+        climate.varmekabler_gang:
+          last_shed: input_datetime.last_shed_varmekabler_gang
+          cycle_count: input_number.cycle_count_varmekabler_gang
+          total_sheds: input_number.total_sheds_varmekabler_gang
+        switch.varmeovn_gjesterom:
+          last_shed: input_datetime.last_shed_varmeovn_gjesterom
+          cycle_count: input_number.cycle_count_varmeovn_gjesterom
+          total_sheds: input_number.total_sheds_varmeovn_gjesterom
+      last_shed_entity: '{{ device_map[trigger.entity_id].last_shed }}'
+      cycle_count_entity: '{{ device_map[trigger.entity_id].cycle_count }}'
+      total_sheds_entity: '{{ device_map[trigger.entity_id].total_sheds }}'
+      last_shed_time: '{{ states(last_shed_entity) }}'
+      minutes_since_last_shed: "{% if last_shed_time not in ['unknown', 'unavailable',
+        ''] %}\n  {{ ((as_timestamp(now()) - as_timestamp(last_shed_time)) / 60) |
+        int }}\n{% else %}\n  999\n{% endif %}\n"
+  - target:
+      entity_id: '{{ last_shed_entity }}'
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+    action: input_datetime.set_datetime
+  - target:
+      entity_id: '{{ total_sheds_entity }}'
+    data:
+      value: '{{ states(total_sheds_entity) | int + 1 }}'
+    action: input_number.set_value
+  - condition: template
+    value_template: '{{ minutes_since_last_shed | int < 10 }}'
+  - target:
+      entity_id: '{{ cycle_count_entity }}'
+    data:
+      value: '{{ [states(cycle_count_entity) | int + 1, 12] | min }}'
+    action: input_number.set_value
+  mode: queued
+- id: '1767212943188'
+  alias: Power Management - Reset Cycle Counters
+  description: Reset cycle counters after devices have been stable for a while
+  triggers:
+  - minutes: /30
+    trigger: time_pattern
+  conditions:
+  - condition: state
+    entity_id: input_boolean.anti_cycling_protection
+    state: 'on'
+  actions:
+  - variables:
+      devices:
+      - entity: switch.varmtvannsbereder
+        last_shed: input_datetime.last_shed_varmtvannsbereder
+        cycle_count: input_number.cycle_count_varmtvannsbereder
+      - entity: switch.oljeovn_stikk
+        last_shed: input_datetime.last_shed_oljeovn_stikk
+        cycle_count: input_number.cycle_count_oljeovn_stikk
+      - entity: switch.fryser
+        last_shed: input_datetime.last_shed_fryser
+        cycle_count: input_number.cycle_count_fryser
+      - entity: switch.vaskemaskin_strom
+        last_shed: input_datetime.last_shed_vaskemaskin
+        cycle_count: input_number.cycle_count_vaskemaskin
+      - entity: switch.layzspa_wifi_controller_layzspa_heat_regulation
+        last_shed: input_datetime.last_shed_layzspa_heat
+        cycle_count: input_number.cycle_count_layzspa_heat
+      - entity: climate.sofakrok
+        last_shed: input_datetime.last_shed_sofakrok
+        cycle_count: input_number.cycle_count_sofakrok
+      - entity: climate.mill_wi_fi_oil
+        last_shed: input_datetime.last_shed_mill_wifi_oil
+        cycle_count: input_number.cycle_count_mill_wifi_oil
+      - entity: climate.varmekabler_bad
+        last_shed: input_datetime.last_shed_varmekabler_bad
+        cycle_count: input_number.cycle_count_varmekabler_bad
+      - entity: climate.varmekabler_gang
+        last_shed: input_datetime.last_shed_varmekabler_gang
+        cycle_count: input_number.cycle_count_varmekabler_gang
+      - entity: switch.varmeovn_gjesterom
+        last_shed: input_datetime.last_shed_varmeovn_gjesterom
+        cycle_count: input_number.cycle_count_varmeovn_gjesterom
+  - repeat:
+      for_each: '{{ devices }}'
+      sequence:
+      - variables:
+          last_shed_time: '{{ states(repeat.item.last_shed) }}'
+          minutes_since_shed: "{% if last_shed_time not in ['unknown', 'unavailable',
+            ''] %}\n  {{ ((as_timestamp(now()) - as_timestamp(last_shed_time)) / 60)
+            | int }}\n{% else %}\n  999\n{% endif %}\n"
+          current_count: '{{ states(repeat.item.cycle_count) | int }}'
+      - condition: template
+        value_template: '{{ minutes_since_shed > 120 and current_count > 0 }}'
+      - target:
+          entity_id: '{{ repeat.item.cycle_count }}'
+        data:
+          value: 0
+        action: input_number.set_value
+  mode: single
+- id: '1767212954870'
+  alias: Power Usage Monitor - High Power Alert
+  description: Sends notification when projected hourly average approaches tier threshold
+  triggers:
+  - entity_id: sensor.smart_shedding_required
+    to: 'True'
+    trigger: state
+  conditions: []
+  actions:
+  - action: notify.mobile_app_sm_g998b
+    data:
+      title: ⚡ Hourly Average Approaching Limit
+      message: 'Projected: {{ (states(''sensor.projected_hourly_power'') | float /
+        1000) | round(2) }} kW Threshold: {{ (states(''sensor.next_tier_threshold'')
+        | float / 1000) | round(0) }} kW Time left: {{ 60 - now().minute }} min {%
+        if is_state(''input_boolean.load_shedding_enabled'', ''on'') %} Load shedding
+        is ENABLED. {% else %} Load shedding is DISABLED. {% endif %}
+
+        '
+  - action: persistent_notification.create
+    data:
+      title: ⚡ Hourly Average Approaching Limit
+      notification_id: power_high_alert
+      message: 'Projected: {{ (states(''sensor.projected_hourly_power'') | float /
+        1000) | round(2) }} kW Threshold: {{ (states(''sensor.next_tier_threshold'')
+        | float / 1000) | round(0) }} kW {{ state_attr(''sensor.smart_shedding_required'',
+        ''reason'') }}
+
+        '
+  mode: single
+- id: '1767212967467'
+  alias: Power Usage Monitor - Notify When Normal
+  description: Sends notification when hourly projection is safely under threshold
+  triggers:
+  - entity_id: sensor.smart_shedding_required
+    to: 'False'
+    from: 'True'
+    trigger: state
+    for:
+      minutes: 2
+  conditions: []
+  actions:
+  - action: notify.mobile_app_sm_g998b
+    data:
+      title: ✅ Hourly Average Safe
+      message: 'Projected: {{ (states(''sensor.projected_hourly_power'') | float /
+        1000) | round(2) }} kW Threshold: {{ (states(''sensor.next_tier_threshold'')
+        | float / 1000) | round(0) }} kW Margin: {{ (state_attr(''sensor.smart_shedding_required'',
+        ''margin_to_threshold_w'') | float / 1000) | round(2) }} kW {% if is_state(''input_boolean.auto_restore_devices'',
+        ''on'') %} Devices will be automatically restored. {% endif %}
+
+        '
+  - action: persistent_notification.dismiss
+    data:
+      notification_id: power_high_alert
+  mode: single
+- id: '1767212978606'
+  alias: Power Usage Monitor - Restore Devices
+  description: Automatically restores devices that were shed when hourly projection
+    is safely under threshold
+  triggers:
+  - entity_id: sensor.smart_shedding_required
+    to: 'False'
+    trigger: state
+    for:
+      minutes: 2
+    id: shedding_not_required
+  - trigger: time_pattern
+    minutes: /5
+    id: periodic_check
+  conditions:
+  - condition: state
+    entity_id: input_boolean.auto_restore_devices
+    state: 'on'
+  - condition: template
+    value_template: "{{ is_state('sensor.smart_shedding_required', 'False') and\n
+      \  (state_attr('sensor.smart_shedding_required', 'margin_to_threshold_w') |
+      float(0)) > 500 }}\n"
+  - condition: or
+    conditions:
+    - condition: state
+      entity_id: input_boolean.was_shed_varmtvannsbereder
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_oljeovn_stikk
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_fryser
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_vaskemaskin
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_layzspa_heat
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_sofakrok
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_mill_wifi_oil
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_varmekabler_bad
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_varmekabler_gang
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.was_shed_varmeovn_gjesterom
+      state: 'on'
+  actions:
+  - variables:
+      anti_cycling_enabled: '{{ is_state(''input_boolean.anti_cycling_protection'',
+        ''on'') }}'
+      devices_to_restore: "{% set ns = namespace(devices=[]) %} {% set anti_cycling
+        = is_state('input_boolean.anti_cycling_protection', 'on') %} {# Varmtvannsbereder
+        #} {% if is_state('input_boolean.was_shed_varmtvannsbereder', 'on') %}\n  {%
+        set last_shed = states('input_datetime.last_shed_varmtvannsbereder') %}\n
+        \ {% set min_off = states('input_number.min_off_time_varmtvannsbereder') |
+        int %}\n  {% set cycle_count = states('input_number.cycle_count_varmtvannsbereder')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'switch.varmtvannsbereder', 'name': 'Varmtvannsbereder', 'flag':
+        'input_boolean.was_shed_varmtvannsbereder', 'domain': 'switch'}] %}\n  {%
+        endif %}\n{% endif %} {# Oljeovn Stikk #} {% if is_state('input_boolean.was_shed_oljeovn_stikk',
+        'on') %}\n  {% set last_shed = states('input_datetime.last_shed_oljeovn_stikk')
+        %}\n  {% set min_off = states('input_number.min_off_time_oljeovn_stikk') |
+        int %}\n  {% set cycle_count = states('input_number.cycle_count_oljeovn_stikk')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'switch.oljeovn_stikk', 'name': 'Oljeovn Stikk', 'flag': 'input_boolean.was_shed_oljeovn_stikk',
+        'domain': 'switch'}] %}\n  {% endif %}\n{% endif %} {# Fryser #} {% if is_state('input_boolean.was_shed_fryser',
+        'on') %}\n  {% set last_shed = states('input_datetime.last_shed_fryser') %}\n
+        \ {% set min_off = states('input_number.min_off_time_fryser') | int %}\n  {%
+        set cycle_count = states('input_number.cycle_count_fryser') | int %}\n  {%
+        set backoff = cycle_count * 10 %}\n  {% set required_off_time = min_off +
+        backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not in ['unknown',
+        'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now()) - as_timestamp(last_shed))
+        / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling or minutes_off >=
+        required_off_time %}\n    {% set ns.devices = ns.devices + [{'entity': 'switch.fryser',
+        'name': 'Fryser', 'flag': 'input_boolean.was_shed_fryser', 'domain': 'switch'}]
+        %}\n  {% endif %}\n{% endif %} {# Vaskemaskin #} {% if is_state('input_boolean.was_shed_vaskemaskin',
+        'on') %}\n  {% set last_shed = states('input_datetime.last_shed_vaskemaskin')
+        %}\n  {% set min_off = states('input_number.min_off_time_vaskemaskin') | int
+        %}\n  {% set cycle_count = states('input_number.cycle_count_vaskemaskin')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'switch.vaskemaskin_strom', 'name': 'Vaskemaskin', 'flag': 'input_boolean.was_shed_vaskemaskin',
+        'domain': 'switch'}] %}\n  {% endif %}\n{% endif %} {# Hot Tub Heater #} {%
+        if is_state('input_boolean.was_shed_layzspa_heat', 'on') %}\n  {% set last_shed
+        = states('input_datetime.last_shed_layzspa_heat') %}\n  {% set min_off = states('input_number.min_off_time_layzspa_heat')
+        | int %}\n  {% set cycle_count = states('input_number.cycle_count_layzspa_heat')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'switch.layzspa_wifi_controller_layzspa_heat_regulation', 'name':
+        'Hot Tub Heater', 'flag': 'input_boolean.was_shed_layzspa_heat', 'domain':
+        'switch'}] %}\n  {% endif %}\n{% endif %} {# Sofakrok #} {% if is_state('input_boolean.was_shed_sofakrok',
+        'on') %}\n  {% set last_shed = states('input_datetime.last_shed_sofakrok')
+        %}\n  {% set min_off = states('input_number.min_off_time_sofakrok') | int
+        %}\n  {% set cycle_count = states('input_number.cycle_count_sofakrok') | int
+        %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time = min_off
+        + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not in ['unknown',
+        'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now()) - as_timestamp(last_shed))
+        / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling or minutes_off >=
+        required_off_time %}\n    {% set ns.devices = ns.devices + [{'entity': 'climate.sofakrok',
+        'name': 'Sofakrok', 'flag': 'input_boolean.was_shed_sofakrok', 'domain': 'climate'}]
+        %}\n  {% endif %}\n{% endif %} {# Mill WiFi Oil #} {% if is_state('input_boolean.was_shed_mill_wifi_oil',
+        'on') %}\n  {% set last_shed = states('input_datetime.last_shed_mill_wifi_oil')
+        %}\n  {% set min_off = states('input_number.min_off_time_mill_wifi_oil') |
+        int %}\n  {% set cycle_count = states('input_number.cycle_count_mill_wifi_oil')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'climate.mill_wi_fi_oil', 'name': 'Mill WiFi Oil', 'flag': 'input_boolean.was_shed_mill_wifi_oil',
+        'domain': 'climate'}] %}\n  {% endif %}\n{% endif %} {# Varmekabler Bad #}
+        {% if is_state('input_boolean.was_shed_varmekabler_bad', 'on') %}\n  {% set
+        last_shed = states('input_datetime.last_shed_varmekabler_bad') %}\n  {% set
+        min_off = states('input_number.min_off_time_varmekabler_bad') | int %}\n  {%
+        set cycle_count = states('input_number.cycle_count_varmekabler_bad') | int
+        %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time = min_off
+        + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not in ['unknown',
+        'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now()) - as_timestamp(last_shed))
+        / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling or minutes_off >=
+        required_off_time %}\n    {% set ns.devices = ns.devices + [{'entity': 'climate.varmekabler_bad',
+        'name': 'Varmekabler Bad', 'flag': 'input_boolean.was_shed_varmekabler_bad',
+        'domain': 'climate'}] %}\n  {% endif %}\n{% endif %} {# Varmekabler Gang #}
+        {% if is_state('input_boolean.was_shed_varmekabler_gang', 'on') %}\n  {% set
+        last_shed = states('input_datetime.last_shed_varmekabler_gang') %}\n  {% set
+        min_off = states('input_number.min_off_time_varmekabler_gang') | int %}\n
+        \ {% set cycle_count = states('input_number.cycle_count_varmekabler_gang')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'climate.varmekabler_gang', 'name': 'Varmekabler Gang', 'flag':
+        'input_boolean.was_shed_varmekabler_gang', 'domain': 'climate'}] %}\n  {%
+        endif %}\n{% endif %} {# Varmeovn Gjesterom #} {% if is_state('input_boolean.was_shed_varmeovn_gjesterom',
+        'on') %}\n  {% set last_shed = states('input_datetime.last_shed_varmeovn_gjesterom')
+        %}\n  {% set min_off = states('input_number.min_off_time_varmeovn_gjesterom')
+        | int %}\n  {% set cycle_count = states('input_number.cycle_count_varmeovn_gjesterom')
+        | int %}\n  {% set backoff = cycle_count * 10 %}\n  {% set required_off_time
+        = min_off + backoff %}\n  {% set minutes_off = 999 %}\n  {% if last_shed not
+        in ['unknown', 'unavailable', ''] %}\n    {% set minutes_off = ((as_timestamp(now())
+        - as_timestamp(last_shed)) / 60) | int %}\n  {% endif %}\n  {% if not anti_cycling
+        or minutes_off >= required_off_time %}\n    {% set ns.devices = ns.devices
+        + [{'entity': 'switch.varmeovn_gjesterom', 'name': 'Varmeovn Gjesterom', 'flag':
+        'input_boolean.was_shed_varmeovn_gjesterom', 'domain': 'switch'}] %}\n  {%
+        endif %}\n{% endif %} {{ ns.devices }}\n"
+  - repeat:
+      for_each: '{{ devices_to_restore }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ repeat.item.domain == "climate" }}'
+          sequence:
+          - choose:
+            - conditions:
+              - condition: template
+                value_template: '{{ repeat.item.entity == "climate.sofakrok" }}'
+              sequence:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: climate.sofakrok
+                data:
+                  hvac_mode: '{{ states("input_text.previous_hvac_mode_sofakrok")
+                    }}'
+            - conditions:
+              - condition: template
+                value_template: '{{ repeat.item.entity == "climate.mill_wi_fi_oil"
+                  }}'
+              sequence:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: climate.mill_wi_fi_oil
+                data:
+                  hvac_mode: '{{ states("input_text.previous_hvac_mode_mill_wifi_oil")
+                    }}'
+            - conditions:
+              - condition: template
+                value_template: '{{ repeat.item.entity == "climate.varmekabler_bad"
+                  }}'
+              sequence:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: climate.varmekabler_bad
+                data:
+                  hvac_mode: '{{ states("input_text.previous_hvac_mode_varmekabler_bad")
+                    }}'
+            - conditions:
+              - condition: template
+                value_template: '{{ repeat.item.entity == "climate.varmekabler_gang"
+                  }}'
+              sequence:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: climate.varmekabler_gang
+                data:
+                  hvac_mode: '{{ states("input_text.previous_hvac_mode_varmekabler_gang")
+                    }}'
+        default:
+        - action: '{{ repeat.item.domain }}.turn_on'
+          target:
+            entity_id: '{{ repeat.item.entity }}'
+      - target:
+          entity_id: '{{ repeat.item.flag }}'
+        action: input_boolean.turn_off
+      - delay:
+          seconds: 2
+  - condition: template
+    value_template: '{{ devices_to_restore | length > 0 }}'
+  - action: notify.mobile_app_sm_g998b
+    data:
+      title: "\U0001F504 Devices Restored"
+      message: "Restored {{ devices_to_restore | length }} device(s):\n{% for device
+        in devices_to_restore %}\n  - {{ device.name }}\n{% endfor %}\nCurrent power:
+        {{ (states('sensor.aidon_active_power_import') | float / 1000) | round(2)
+        }} kW\n"
+  - action: persistent_notification.create
+    data:
+      title: "\U0001F504 Devices Restored"
+      notification_id: power_devices_restored
+      message: "Restored {{ devices_to_restore | length }} device(s):\n{% for device
+        in devices_to_restore %}\n  - {{ device.name }}\n{% endfor %}\nCurrent power:
+        {{ (states('sensor.aidon_active_power_import') | float / 1000) | round(2)
+        }} kW\n"
+  mode: single
+- id: '1767214203732'
+  alias: "\U0001F525 Advanced Heating Control V5 - Stue"
+  description: ''
+  use_blueprint:
+    path: panhans/advanced_heating_control.yaml
+    input:
+      input_trvs:
+      - climate.sofakrok
+      - climate.stue_oljeovn
+      input_temperature_sensor: sensor.aqara_stue_temperature
+      input_temperature_eco_static: 17
+      input_temperature_comfort: input_number.stuetemperatur
+      input_temperature_eco: input_number.stue_lav_temperatur
+      input_mode_party:
+      - input_boolean.heating_on
+      input_physical_change: true
+      input_schedulers:
+      - schedule.hjemme_fr_ajobb
+      input_mode_room_temperature_threshold: 18.5
+      input_custom_condition: []
+      input_custom_action:
+      - if:
+        - condition: template
+          value_template: '{{ is_heating | default(false) }}'
+        - condition: or
+          conditions:
+          - condition: state
+            entity_id: input_boolean.was_shed_sofakrok
+            state: 'on'
+          - condition: state
+            entity_id: input_boolean.was_shed_oljeovn_stikk
+            state: 'on'
+        then:
+        - action: notify.mobile_app_sm_g998b
+          data:
+            title: "\U0001F525❌ Heating Blocked"
+            message: 'AHC wants to heat but can''t - load shedding active for: {%
+              set devices = [] %} {% if is_state(''input_boolean.was_shed_sofakrok'',
+              ''on'') %}{% set devices = devices + [''Sofakrok''] %}{% endif %} {%
+              if is_state(''input_boolean.was_shed_oljeovn_stikk'', ''on'') %}{% set
+              devices = devices + [''Stue Oljeovn''] %}{% endif %} {{ devices | join('',
+              '') }}
+
+              '
+            data:
+              tag: ahc_blocked
+              channel: power_management
+        - action: persistent_notification.create
+          data:
+            title: "\U0001F525❌ AHC Heating Blocked"
+            message: 'AHC wants to heat but devices are shed: {% set devices = []
+              %} {% if is_state(''input_boolean.was_shed_sofakrok'', ''on'') %}{%
+              set devices = devices + [''Sofakrok''] %}{% endif %} {% if is_state(''input_boolean.was_shed_oljeovn_stikk'',
+              ''on'') %}{% set devices = devices + [''Stue Oljeovn''] %}{% endif %}
+              {{ devices | join('', '') }}
+
+              '
+            notification_id: ahc_heating_blocked
+- id: '1767500000001'
+  alias: Power - Save Last Hour Average
+  description: Saves the previous hour's average power using utility meter last_period
+  triggers:
+  - trigger: time_pattern
+    hours: /1
+    minutes: 0
+    seconds: 5
+  actions:
+  - variables:
+      last_period_kwh: "{{ state_attr('sensor.hourly_energy_consumption', 'last_period') | float(0) }}"
+      last_hour_avg_w: "{{ (last_period_kwh * 1000) | round(0) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.last_hour_average_power
+    data:
+      value: '{{ last_hour_avg_w }}'
+  - action: notify.mobile_app_sm_g998b
+    data:
+      title: "\U0001F4CA Hourly Power Summary"
+      message: "Hour ended: {{ (now() - timedelta(hours=1)).strftime('%H:00') }}-{{ now().strftime('%H:00') }}\nAverage power: {{ (last_hour_avg_w / 1000) | round(2) }} kW\nLimit: {{ (states('input_number.power_threshold') | float(5000) / 1000) | round(1) }} kW\n{% if last_hour_avg_w > states('input_number.power_threshold') | float(5000) %}⚠️ EXCEEDED LIMIT!{% else %}✅ Under limit{% endif %}"
+    enabled: false
+  mode: single
+- id: '1767376109589'
+  alias: "\U0001F525 Advanced Heating Control V5 - Gang"
+  description: ''
+  use_blueprint:
+    path: panhans/advanced_heating_control.yaml
+    input:
+      input_trvs:
+      - climate.varmekabler_gang
+      input_temperature_sensor: sensor.gang_temperature
+      input_temperature_comfort_static: 20
+      input_temperature_eco_static: 16
+      input_adjustments: {}
+      input_physical_change: true
+      input_off_instead_of_eco: false
+      input_calibration_key_word: local_temperature_calibration
+      input_schedulers:
+      - schedule.varmekabler_gang
+- id: '1767500000002'
+  alias: Power - Update Today's Peak (Døgnmaks)
+  description: Updates today's peak hour when the hourly average exceeds current peak
+  triggers:
+  - trigger: time_pattern
+    hours: /1
+    minutes: 1
+    seconds: 0
+  actions:
+  - variables:
+      last_hour_avg: '{{ states(''input_number.last_hour_average_power'') | float(0)
+        }}'
+      current_peak: '{{ states(''input_number.todays_peak_power'') | float(0) }}'
+  - condition: template
+    value_template: '{{ last_hour_avg > current_peak }}'
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.todays_peak_power
+    data:
+      value: '{{ last_hour_avg }}'
+  - action: logbook.log
+    data:
+      name: Døgnmaks
+      message: 'New daily peak: {{ (last_hour_avg / 1000) | round(2) }} kW (was {{
+        (current_peak / 1000) | round(2) }} kW)'
+  mode: single
+- id: '1767500000003'
+  alias: Power - Save Døgnmaks at Midnight
+  description: At midnight, saves today's peak and updates top 3 if needed
+  triggers:
+  - trigger: time
+    at: 00:00:05
+  actions:
+  - variables:
+      today_peak: '{{ states(''input_number.todays_peak_power'') | float(0) }}'
+      yesterday: '{{ (now() - timedelta(days=1)).strftime(''%Y-%m-%d'') }}'
+      p1: '{{ states(''input_number.monthly_peak_1'') | float(0) }}'
+      p2: '{{ states(''input_number.monthly_peak_2'') | float(0) }}'
+      p3: '{{ states(''input_number.monthly_peak_3'') | float(0) }}'
+      d1: '{{ states(''input_text.monthly_peak_1_date'') }}'
+      d2: '{{ states(''input_text.monthly_peak_2_date'') }}'
+      d3: '{{ states(''input_text.monthly_peak_3_date'') }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ today_peak > p1 }}'
+      sequence:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.monthly_peak_3
+        data:
+          value: '{{ p2 }}'
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.monthly_peak_3_date
+        data:
+          value: '{{ d2 }}'
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.monthly_peak_2
+        data:
+          value: '{{ p1 }}'
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.monthly_peak_2_date
+        data:
+          value: '{{ d1 }}'
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.monthly_peak_1
+        data:
+          value: '{{ today_peak }}'
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.monthly_peak_1_date
+        data:
+          value: '{{ yesterday }}'
+      - action: notify.mobile_app_sm_g998b
+        data:
+          title: "\U0001F3C6 New #1 Døgnmaks!"
+          message: '{{ (today_peak / 1000) | round(2) }} kW on {{ yesterday }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ today_peak > p2 }}'
+      sequence:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.monthly_peak_3
+        data:
+          value: '{{ p2 }}'
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.monthly_peak_3_date
+        data:
+          value: '{{ d2 }}'
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.monthly_peak_2
+        data:
+          value: '{{ today_peak }}'
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.monthly_peak_2_date
+        data:
+          value: '{{ yesterday }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ today_peak > p3 }}'
+      sequence:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.monthly_peak_3
+        data:
+          value: '{{ today_peak }}'
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.monthly_peak_3_date
+        data:
+          value: '{{ yesterday }}'
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.todays_peak_power
+    data:
+      value: 0
+  mode: single
+- id: '1767500000004'
+  alias: Power - Reset Monthly Peaks
+  description: Resets all monthly peaks on the 1st of each month
+  triggers:
+  - trigger: time
+    at: 00:00:10
+  conditions:
+  - condition: template
+    value_template: '{{ now().day == 1 }}'
+  actions:
+  - action: input_number.set_value
+    target:
+      entity_id:
+      - input_number.monthly_peak_1
+      - input_number.monthly_peak_2
+      - input_number.monthly_peak_3
+    data:
+      value: 0
+  - action: input_text.set_value
+    target:
+      entity_id:
+      - input_text.monthly_peak_1_date
+      - input_text.monthly_peak_2_date
+      - input_text.monthly_peak_3_date
+    data:
+      value: ''
+  - action: notify.mobile_app_sm_g998b
+    data:
+      title: "\U0001F4CA New Month - Peaks Reset"
+      message: Monthly døgnmaks tracking has been reset for {{ now().strftime('%B
+        %Y') }}
+  mode: single

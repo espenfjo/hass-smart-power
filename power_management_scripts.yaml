@@ -1,0 +1,199 @@
+# Power Management Scripts
+# Quick actions for power management system
+
+script:
+  power_restore_all_now:
+    alias: "Restore All Devices Now"
+    description: "Immediately restore all shed devices (bypasses anti-cycling)"
+    icon: mdi:restore-alert
+    sequence:
+      - variables:
+          devices:
+            - entity: switch.varmtvannsbereder
+              flag: input_boolean.was_shed_varmtvannsbereder
+              name: Varmtvannsbereder
+            - entity: switch.oljeovn_stikk
+              flag: input_boolean.was_shed_oljeovn_stikk
+              name: Oljeovn Stikk
+            - entity: switch.fryser
+              flag: input_boolean.was_shed_fryser
+              name: Fryser
+            - entity: switch.vaskemaskin_strom
+              flag: input_boolean.was_shed_vaskemaskin
+              name: Vaskemaskin
+            - entity: switch.layzspa_wifi_controller_layzspa_heat_regulation
+              flag: input_boolean.was_shed_layzspa_heat
+              name: Hot Tub
+            - entity: climate.sofakrok
+              flag: input_boolean.was_shed_sofakrok
+              name: Sofakrok
+            - entity: climate.mill_wi_fi_oil
+              flag: input_boolean.was_shed_mill_wifi_oil
+              name: Mill WiFi Oil
+            - entity: climate.varmekabler_bad
+              flag: input_boolean.was_shed_varmekabler_bad
+              name: Varmekabler Bad
+            - entity: climate.varmekabler_gang
+              flag: input_boolean.was_shed_varmekabler_gang
+              name: Varmekabler Gang
+            - entity: switch.varmeovn_gjesterom
+              flag: input_boolean.was_shed_varmeovn_gjesterom
+              name: Varmeovn Gjesterom
+          restored: []
+      - repeat:
+          for_each: "{{ devices }}"
+          sequence:
+            - if: "{{ states(repeat.item.flag) == 'on' }}"
+              then:
+                - service: "{{ repeat.item.entity.split('.')[0] }}.turn_on"
+                  target:
+                    entity_id: "{{ repeat.item.entity }}"
+                - service: input_boolean.turn_off
+                  target:
+                    entity_id: "{{ repeat.item.flag }}"
+                - variables:
+                    restored: "{{ restored + [repeat.item.name] }}"
+                - delay:
+                    seconds: 1
+      - if: "{{ restored | length > 0 }}"
+        then:
+          - service: notify.mobile_app_sm_g998b
+            data:
+              title: "✅ Manual Restore Complete"
+              message: >
+                Restored {{ restored | length }} device(s):
+
+                {% for device in restored %}
+                - {{ device }}
+                {% endfor %}
+
+                ⚠️ Anti-cycling was bypassed!
+
+  power_reset_all_cycle_counters:
+    alias: "Reset All Cycle Counters"
+    description: "Reset cycle counters for all devices to 0"
+    icon: mdi:counter
+    sequence:
+      - service: input_number.set_value
+        target:
+          entity_id:
+            - input_number.cycle_count_varmtvannsbereder
+            - input_number.cycle_count_oljeovn_stikk
+            - input_number.cycle_count_fryser
+            - input_number.cycle_count_vaskemaskin
+            - input_number.cycle_count_layzspa_heat
+            - input_number.cycle_count_sofakrok
+            - input_number.cycle_count_mill_wifi_oil
+            - input_number.cycle_count_varmekabler_bad
+            - input_number.cycle_count_varmekabler_gang
+            - input_number.cycle_count_varmeovn_gjesterom
+        data:
+          value: 0
+      - service: notify.mobile_app_sm_g998b
+        data:
+          title: "🔄 Cycle Counters Reset"
+          message: "All device cycle counters have been reset to 0."
+
+  power_reset_total_sheds:
+    alias: "Reset Total Shed Counters"
+    description: "Reset lifetime shed counters for all devices"
+    icon: mdi:chart-box-outline
+    sequence:
+      - service: input_number.set_value
+        target:
+          entity_id:
+            - input_number.total_sheds_varmtvannsbereder
+            - input_number.total_sheds_oljeovn_stikk
+            - input_number.total_sheds_fryser
+            - input_number.total_sheds_vaskemaskin
+            - input_number.total_sheds_layzspa_heat
+            - input_number.total_sheds_sofakrok
+            - input_number.total_sheds_mill_wifi_oil
+            - input_number.total_sheds_varmekabler_bad
+            - input_number.total_sheds_varmekabler_gang
+            - input_number.total_sheds_varmeovn_gjesterom
+        data:
+          value: 0
+      - service: notify.mobile_app_sm_g998b
+        data:
+          title: "📊 Statistics Reset"
+          message: "All lifetime shed counters have been reset to 0."
+
+  power_test_load_shedding:
+    alias: "Test Load Shedding"
+    description: "Temporarily lower threshold to test shedding (5 min)"
+    icon: mdi:test-tube
+    sequence:
+      - variables:
+          original_threshold: "{{ states('input_number.power_threshold') | float(5000) }}"
+          test_threshold: "{{ [1000, (states('sensor.aidon_active_power_import') | float(0)) - 500] | max }}"
+      - service: notify.mobile_app_sm_g998b
+        data:
+          title: "🧪 Load Shedding Test Starting"
+          message: >
+            Temporarily lowering threshold from {{ (original_threshold / 1000) | round(1) }} kW
+            to {{ (test_threshold / 1000) | round(1) }} kW for 5 minutes.
+
+            This should trigger load shedding if auto-shedding is enabled.
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.power_threshold
+        data:
+          value: "{{ test_threshold }}"
+      - delay:
+          minutes: 5
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.power_threshold
+        data:
+          value: "{{ original_threshold }}"
+      - service: notify.mobile_app_sm_g998b
+        data:
+          title: "🧪 Load Shedding Test Complete"
+          message: "Threshold restored to {{ (original_threshold / 1000) | round(1) }} kW."
+
+  power_disable_all_shedding:
+    alias: "Disable All Load Shedding"
+    description: "Turn off load shedding for all devices"
+    icon: mdi:power-plug-off-outline
+    sequence:
+      - service: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.load_shedding_varmtvannsbereder
+            - input_boolean.load_shedding_oljeovn_stikk
+            - input_boolean.load_shedding_fryser
+            - input_boolean.load_shedding_vaskemaskin
+            - input_boolean.load_shedding_layzspa_heat
+            - input_boolean.load_shedding_sofakrok
+            - input_boolean.load_shedding_mill_wifi_oil
+            - input_boolean.load_shedding_varmekabler_bad
+            - input_boolean.load_shedding_varmekabler_gang
+            - input_boolean.load_shedding_varmeovn_gjesterom
+      - service: notify.mobile_app_sm_g998b
+        data:
+          title: "🔌 Load Shedding Disabled"
+          message: "All devices have been disabled from automatic load shedding."
+
+  power_enable_all_shedding:
+    alias: "Enable All Load Shedding"
+    description: "Turn on load shedding for all devices"
+    icon: mdi:power-plug
+    sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id:
+            - input_boolean.load_shedding_varmtvannsbereder
+            - input_boolean.load_shedding_oljeovn_stikk
+            - input_boolean.load_shedding_fryser
+            - input_boolean.load_shedding_vaskemaskin
+            - input_boolean.load_shedding_layzspa_heat
+            - input_boolean.load_shedding_sofakrok
+            - input_boolean.load_shedding_mill_wifi_oil
+            - input_boolean.load_shedding_varmekabler_bad
+            - input_boolean.load_shedding_varmekabler_gang
+            - input_boolean.load_shedding_varmeovn_gjesterom
+      - service: notify.mobile_app_sm_g998b
+        data:
+          title: "🔌 Load Shedding Enabled"
+          message: "All devices have been enabled for automatic load shedding."
