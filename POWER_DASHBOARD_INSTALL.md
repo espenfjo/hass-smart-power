@@ -48,6 +48,15 @@ Install these custom cards via HACS before using the dashboard:
 - Time remaining in hour
 - Dynamic trigger threshold
 
+### Remaining Hour Budget
+- Budget left (kW you can use for rest of hour to stay under threshold)
+- Current power usage
+- Over/Under budget indicator (+/- difference)
+- ApexCharts graph: Budget vs Current Power (this hour)
+  - Green line: Remaining budget
+  - Orange area: Current power
+  - Red line: Threshold
+
 ### Quick Stats Row
 - Current instantaneous power
 - 5-minute smoothed power (used for projections)
@@ -55,8 +64,8 @@ Install these custom cards via HACS before using the dashboard:
 - Shedding status indicator
 
 ### Fastledd (Monthly)
-- Today's dognmaks (highest hourly avg)
-- Fastledd average (top 3 peaks)
+- Today's finalized peak (highest completed hourly avg)
+- Fastledd average (top 3 finalized peaks)
 - Current billing tier
 - Top 3 peak chips with dates
 

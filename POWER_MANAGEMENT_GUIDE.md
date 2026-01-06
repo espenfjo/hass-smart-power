@@ -36,11 +36,13 @@ This power management system is designed for the **Norwegian electricity billing
 
 ### The "Day Lost" Logic
 
-If today's peak has already exceeded your target threshold, there's no point protecting it anymore. The system automatically shifts to protect the **next tier up**.
+If today's **finalized peak** (from completed hours) has already exceeded your target threshold, there's no point protecting it anymore. The system automatically shifts to protect the **next tier up**.
+
+**Important**: Only finalized hourly peaks trigger "day lost" - not mid-hour averages which can be misleading.
 
 **Example**:
 - Your target: 5 kW (`input_number.power_threshold`)
-- Today's peak so far: 5.3 kW (already exceeded!)
+- Today's finalized peak: 5.3 kW (already exceeded!)
 - System now protects: 10 kW (next tier)
 
 ### Key Sensors
@@ -49,8 +51,41 @@ If today's peak has already exceeded your target threshold, there's no point pro
 |--------|-------------|
 | `sensor.next_tier_threshold` | Current protection target (adjusts if day is "lost") |
 | `sensor.smart_shedding_required` | True/False - whether shedding is needed now |
-| `sensor.fastledd_average` | Real-time average of top 3 peaks (includes today) |
+| `sensor.fastledd_average` | Average of top 3 finalized peaks |
 | `sensor.fastledd_tier` | Current billing tier based on fastledd average |
+
+---
+
+## Budget System
+
+### Remaining Hour Budget
+
+The system calculates how much power you can use for the **rest of the hour** while staying under your threshold:
+
+```
+budget = (threshold × 60 - current_avg × minutes_elapsed) / minutes_remaining
+```
+
+**Example** at minute 34 with 6.39 kW current average:
+- Total budget (5 kW threshold) = 5000 × 60 = 300,000 watt-minutes
+- Used = 6390 × 34 = 217,260 watt-minutes
+- Remaining = (300,000 - 217,260) / 26 = **3182W**
+
+This means you need to average only 3.18 kW for the remaining 26 minutes to hit exactly 5 kW for the hour.
+
+### Budget-Based Shedding
+
+The system triggers shedding when:
+
+1. **Projection-based**: `projected > threshold × trigger_pct` (traditional)
+2. **Budget-based**: After minute 15, if `current_power > budget × 1.1` (10% over budget)
+
+The smart mode calculates how much to reduce:
+```
+to_reduce = max(current - budget, projected - threshold, 0)
+```
+
+This ensures shedding happens when you're over budget, even if the projection is optimistic.
 
 ---
 
@@ -93,6 +128,10 @@ The system becomes more tolerant as the hour progresses:
 
 **Why?** Early in the hour, there's more uncertainty. Late in the hour, the average is mostly locked in.
 
+#### 4. Finalized Peaks Only
+
+**Critical**: Sensors like `next_tier_threshold` and `fastledd_average` only use **finalized** hourly peaks from `input_number.todays_peak_power`, not the current hour average. This prevents mid-hour spikes from incorrectly marking the day as "lost".
+
 ---
 
 ## Configuration
@@ -106,6 +145,7 @@ The system becomes more tolerant as the hour progresses:
 | `input_boolean.load_shedding_enabled` | Enable automatic load shedding | ON |
 | `input_boolean.smart_shedding_mode` | Shed minimum devices (vs all) | ON |
 | `input_boolean.auto_restore_devices` | Auto-restore when safe | ON |
+| `input_boolean.anti_cycling_protection` | Prevent rapid on-off cycling | ON |
 
 ### Device Configuration
 
@@ -121,6 +161,24 @@ The system tracks how long each device has been shed in the last 24 hours. Devic
 
 ---
 
+## Smart Anti-Cycling
+
+### How It Works
+
+When devices are shed and restored repeatedly, they accumulate a cycle count which adds backoff time before restoration. However, this is **bypassed when safe**:
+
+| Condition | Behavior |
+|-----------|----------|
+| Budget > current × 1.5 | Skip backoff (plenty of headroom) |
+| Minute < 15 | Skip backoff (early in hour, time to shed again if needed) |
+| Otherwise | Apply backoff: `min(cycle_count × 10, 20)` minutes |
+
+### Backoff Cap
+
+Maximum backoff is capped at **20 minutes** regardless of cycle count. This prevents devices from being off for excessive periods.
+
+---
+
 ## Key Sensors
 
 ### Hourly Tracking
@@ -129,6 +187,7 @@ The system tracks how long each device has been shed in the last 24 hours. Devic
 |--------|-------------|
 | `sensor.current_hour_average_power` | Average power this hour so far |
 | `sensor.projected_hourly_power` | Predicted hourly average at :59 |
+| `sensor.remaining_hour_budget` | Average power you can use for rest of hour |
 | `sensor.hourly_power_margin` | Watts remaining before exceeding threshold |
 | `sensor.power_5min_average` | 5-minute smoothed power (for projections) |
 | `input_number.last_hour_average_power` | Previous hour's final average |
@@ -137,24 +196,27 @@ The system tracks how long each device has been shed in the last 24 hours. Devic
 
 | Sensor/Helper | Description |
 |---------------|-------------|
-| `input_number.todays_peak_power` | Highest hourly avg today |
+| `input_number.todays_peak_power` | Highest **finalized** hourly avg today |
 | `input_number.monthly_peak_1/2/3` | Top 3 peaks this month |
 | `input_text.monthly_peak_1/2/3_date` | Dates of top 3 peaks |
-| `sensor.fastledd_average` | Average of top 3 (includes today if applicable) |
+| `sensor.fastledd_average` | Average of top 3 finalized peaks |
 | `sensor.fastledd_tier` | Current billing tier |
 
 ### Smart Shedding
 
 | Sensor | Description |
 |--------|-------------|
-| `sensor.next_tier_threshold` | Current target (may shift if day lost) |
+| `sensor.next_tier_threshold` | Current target (based on finalized peaks) |
 | `sensor.smart_shedding_required` | Whether shedding is currently needed |
 
 **Attributes on `sensor.smart_shedding_required`**:
 - `projected_w`: Current projection
 - `next_threshold_w`: Current target
+- `budget_w`: Remaining hour budget
+- `current_power_w`: Current power usage
 - `trigger_percentage`: Active trigger % (95-99%)
 - `margin_to_threshold_w`: Buffer before shedding
+- `over_budget`: True if current > budget
 - `reason`: Human-readable explanation
 
 ---
@@ -184,8 +246,8 @@ The system tracks how long each device has been shed in the last 24 hours. Devic
 
 | Trigger | Automation | Action |
 |---------|------------|--------|
-| `smart_shedding_required` = True | Load Shedding | Sheds devices to get below dynamic trigger threshold |
-| `smart_shedding_required` = False (2 min) | Restore Devices | Restores previously shed devices |
+| `smart_shedding_required` = True | Load Shedding | Sheds devices based on `max(over_budget, over_projection)` |
+| `smart_shedding_required` = False (2 min) | Restore Devices | Restores devices (with smart anti-cycling) |
 
 ---
 
@@ -199,6 +261,12 @@ The Power Monitor dashboard shows:
 - Time remaining in hour
 - Dynamic trigger threshold
 
+### Remaining Hour Budget
+- Budget left (kW you can use for rest of hour)
+- Current usage
+- Over/Under budget indicator
+- Graph: Budget vs Current Power (this hour)
+
 ### Quick Stats
 - Current instantaneous power
 - 5-minute smoothed power
@@ -206,7 +274,7 @@ The Power Monitor dashboard shows:
 - Shedding status
 
 ### Fastledd (Monthly)
-- Today's døgnmaks
+- Today's døgnmaks (finalized)
 - Fastledd average (top 3)
 - Current tier
 - Top 3 peak chips with dates
@@ -225,7 +293,13 @@ The Power Monitor dashboard shows:
 ### Shedding triggers too quickly?
 1. Increase `spike_duration_assumption` (try 30 min)
 2. Check that `sensor.power_5min_average` is working (should smooth spikes)
-3. Verify trigger thresholds are at 95/97/98/99% (not older 85/90/95/98%)
+3. Verify trigger thresholds are at 95/97/98/99%
+
+### Shedding not triggering when over budget?
+1. Check `sensor.smart_shedding_required` state and attributes
+2. Verify `input_boolean.load_shedding_enabled` is ON
+3. Check that devices have `input_boolean.load_shedding_*` ON
+4. Verify devices are actually ON (can't shed what's already off)
 
 ### Today's peak not updating?
 1. Check `input_number.last_hour_average_power` - should update at :00:05
@@ -233,15 +307,21 @@ The Power Monitor dashboard shows:
 3. Peak only updates at :01:00 each hour
 
 ### Fastledd average seems wrong?
-1. Check if today's peak is included (see `includes_today` attribute)
-2. Verify monthly peaks are set correctly
-3. Check dates on monthly peaks (should be different days)
+1. Only **finalized** peaks are included (not current hour average)
+2. Check `todays_finalized_peak_w` attribute
+3. Verify monthly peaks are set correctly
 
 ### Devices not restoring?
 1. Verify `auto_restore_devices` is ON
 2. Check `smart_shedding_required` is False
 3. Ensure `margin_to_threshold_w` > 500
-4. Verify device was shed by system (not manually off)
+4. Check if budget is low (anti-cycling may delay restore)
+5. Early in hour or high budget should restore immediately
+
+### Threshold showing wrong value (e.g., 10kW instead of 5kW)?
+1. Check `input_number.todays_peak_power` - this is the finalized peak
+2. Only finalized peaks (not current hour avg) affect the threshold
+3. If todays_peak > your threshold, system protects next tier up
 
 ---
 
@@ -260,11 +340,13 @@ The Power Monitor dashboard shows:
 This system protects your electricity bill by:
 
 1. **Tracking hourly averages** (not spikes)
-2. **Predicting** where the hour is heading
-3. **Smoothing** power readings to avoid false triggers
-4. **Dynamically adjusting** thresholds based on time in hour
-5. **Shifting targets** when a day is already "lost"
-6. **Shedding intelligently** - minimum devices, fairness-based
-7. **Auto-restoring** when safe
+2. **Budget-based shedding** - knows exactly how much power you can use
+3. **Projection-based shedding** - predicts where the hour is heading
+4. **Smoothing** power readings to avoid false triggers
+5. **Dynamically adjusting** thresholds based on time in hour
+6. **Using finalized peaks only** - mid-hour spikes don't mark day as "lost"
+7. **Shifting targets** when a day is already "lost"
+8. **Shedding intelligently** - minimum devices, fairness-based
+9. **Smart anti-cycling** - quick restore when safe, protection when budget is tight
 
 The goal: Keep your fastledd average in the lowest practical tier while maintaining comfort.

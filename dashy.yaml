@@ -463,6 +463,158 @@ views:
                       50% { opacity: 0.7; }
                     }
 
+          # Remaining Hour Budget - Shows how much power you can use for the rest of the hour
+          - type: custom:mushroom-title-card
+            title: 🎯 Remaining Hour Budget
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.remaining_hour_budget') | float(0) / 1000) | round(2) }} kW
+                secondary: Budget Left
+                icon: mdi:battery-clock
+                icon_color: >
+                  {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                  {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                  {% if budget <= 0 %}red
+                  {% elif current > budget %}amber
+                  {% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.remaining_hour_budget
+                card_mod:
+                  style: |
+                    ha-card {
+                      {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                      {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                      {% if budget <= 0 %}
+                      background: rgba(239, 68, 68, 0.2);
+                      {% elif current > budget %}
+                      background: rgba(255, 193, 7, 0.2);
+                      {% else %}
+                      background: rgba(76, 175, 80, 0.15);
+                      {% endif %}
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {{ (states('sensor.aidon_active_power_import') | float(0) / 1000) | round(2) }} kW
+                secondary: Using Now
+                icon: mdi:flash
+                icon_color: amber
+                layout: vertical
+                tap_action:
+                  action: more-info
+                  entity: sensor.aidon_active_power_import
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: rgba(255, 152, 0, 0.1);
+                    }
+              - type: custom:mushroom-template-card
+                primary: >
+                  {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                  {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                  {% set diff = budget - current %}
+                  {% if diff >= 0 %}
+                    +{{ (diff / 1000) | round(2) }} kW
+                  {% else %}
+                    {{ (diff / 1000) | round(2) }} kW
+                  {% endif %}
+                secondary: >
+                  {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                  {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                  {% if current > budget %}Over Budget{% else %}Under Budget{% endif %}
+                icon: >
+                  {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                  {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                  {% if current > budget %}mdi:arrow-up-bold{% else %}mdi:arrow-down-bold{% endif %}
+                icon_color: >
+                  {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                  {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                  {% if current > budget %}red{% else %}green{% endif %}
+                layout: vertical
+                tap_action:
+                  action: none
+                card_mod:
+                  style: |
+                    ha-card {
+                      {% set budget = states('sensor.remaining_hour_budget') | float(0) %}
+                      {% set current = states('sensor.aidon_active_power_import') | float(0) %}
+                      {% if current > budget %}
+                      background: rgba(239, 68, 68, 0.15);
+                      {% else %}
+                      background: rgba(76, 175, 80, 0.15);
+                      {% endif %}
+                    }
+
+          - type: custom:apexcharts-card
+            graph_span: 1h
+            header:
+              show: true
+              title: Budget vs Current Power (This Hour)
+              show_states: true
+              colorize_states: true
+            span:
+              start: hour
+            yaxis:
+              - id: power
+                min: 0
+                apex_config:
+                  tickAmount: 4
+                  labels:
+                    formatter: |
+                      EVAL:function(value) {
+                        return (value / 1000).toFixed(1) + ' kW';
+                      }
+            series:
+              - entity: sensor.remaining_hour_budget
+                name: Budget
+                stroke_width: 2
+                type: line
+                curve: stepline
+                color: '#4caf50'
+                opacity: 0.9
+                extend_to: false
+                show:
+                  legend_value: true
+                  in_header: true
+                group_by:
+                  func: last
+                  duration: 1min
+              - entity: sensor.aidon_active_power_import
+                name: Current
+                stroke_width: 2
+                type: area
+                curve: smooth
+                color: '#ff9800'
+                opacity: 0.3
+                extend_to: false
+                show:
+                  legend_value: true
+                  in_header: true
+                group_by:
+                  func: avg
+                  duration: 1min
+              - entity: sensor.next_tier_threshold
+                name: Threshold
+                stroke_width: 1
+                type: line
+                curve: straight
+                color: '#f44336'
+                opacity: 0.5
+                extend_to: end
+                show:
+                  legend_value: false
+                  in_header: false
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 12px;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+
           # Fastledd Tracking - Norwegian billing (avg of 3 highest daily peaks)
           - type: custom:mushroom-title-card
             title: 📊 Fastledd (Månedlig)
